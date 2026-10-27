@@ -14,7 +14,7 @@ namespace PaPHideoutModule
     /// Factory fragments, only quieter. Look at one and pick "Investigate": the pickup sound plays, the rock stays and
     /// falls silent. When all three are investigated, the hideout radio plays BO3's "115" until the song ends, then the
     /// hideout's own music comes back. Progress lasts the game session across hideout visits; a raid or a restart
-    /// starts it over. F11 in the hideout places rock 1..3 under the crosshair and saves the spot to the config.
+    /// starts it over. The rocks sit at fixed spots (<see cref="Spots"/>).
     /// </summary>
     internal static class PaPHideoutRocks
     {
