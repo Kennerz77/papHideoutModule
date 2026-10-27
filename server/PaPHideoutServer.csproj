@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>PaPHideoutServer</AssemblyName>
+    <RootNamespace>PaPHideoutServer</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputType>Library</OutputType>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+
+    <!-- Only this install. Do NOT point at D:\OTHER LAUNCHERS\BSTATE GAMES. -->
+    <SptRuntime>D:\OTHER LAUNCHERS\BUTTERSTATE\SPT_Runtime</SptRuntime>
+    <ModOutputPath>$(SptRuntime)\user\mods\PaPHideoutServer</ModOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="SPTarkov.Server.Core" HintPath="$(SptRuntime)\SPTarkov.Server.Core.dll" Private="false" />
+    <Reference Include="SPTarkov.DI" HintPath="$(SptRuntime)\SPTarkov.DI.dll" Private="false" />
+    <Reference Include="SPTarkov.Common" HintPath="$(SptRuntime)\SPTarkov.Common.dll" Private="false" />
+    <Reference Include="SemanticVersioning" HintPath="$(SptRuntime)\SemanticVersioning.dll" Private="false" />
+    <!-- Harmony patches for the quest, through SPT's own wrapper (both ship with the server) -->
+    <Reference Include="SPTarkov.Reflection" HintPath="$(SptRuntime)\SPTarkov.Reflection.dll" Private="false" />
+    <Reference Include="0Harmony" HintPath="$(SptRuntime)\0Harmony.dll" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CopyToMods" AfterTargets="Build">
+    <MakeDir Directories="$(ModOutputPath)" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(ModOutputPath)" />
+    <!-- The "115 Riddles" quest picture, served to the client by the mod -->
+    <Copy SourceFiles="..\assets\quest_115_riddles.png" DestinationFolder="$(ModOutputPath)" SkipUnchangedFiles="true" />
+    <Message Importance="high" Text="Copied $(TargetFileName) -> $(ModOutputPath)" />
+  </Target>
+
+</Project>
