@@ -5,6 +5,7 @@ using SPTarkov.Server.Core.Helpers.Profile;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
+using SPTarkov.Server.Core.Models.Eft.Hideout;
 using SPTarkov.Server.Core.Models.Eft.ItemEvent;
 using SPTarkov.Server.Core.Models.Eft.Quests;
 using SPTarkov.Server.Core.Models.Enums;
@@ -308,9 +309,6 @@ public class PaPQuestLoader(
             },
             ItemReward(PaPQuestInfo.Fixed("e0", 2), PaPQuestInfo.Fixed("d0", 1), 1, Money.ROUBLES, config.RewardRoubles),
         };
-        // Mechanic mails the fragments back with his message, as ordinary items
-        for (int i = 0; i < PaPQuestInfo.FragmentCount; i++)
-            rewards.Add(ItemReward(PaPQuestInfo.Fixed("e1", i + 1), PaPQuestInfo.Fixed("d1", i + 1), i + 2, PaPQuestInfo.ReturnedFragments[i], 1, unknown: true));
         return rewards;
     }
 
@@ -468,6 +466,15 @@ public class PaPQuestService
     {
         if (StatusOf(_profileHelper.GetPmcProfile(sessionId)) == null)
             quests.RemoveAll(q => q.Id == PaPQuestInfo.QuestId);
+    }
+
+    /// <summary>False (with a warning in the response) when the build is started before "115 Riddles" is finished.</summary>
+    public bool AllowUpgrade(PmcData pmc, HideoutUpgradeRequestData request, ItemEventRouterResponse output)
+    {
+        if ((int)request.AreaType != PaPAreaInfo.Type || StatusOf(pmc)?.Status == QuestStatusEnum.Success)
+            return true;
+        output.Warnings = [new Warning { Index = 0, ErrorMessage = "Mechanic has to finish the 115 Riddles job first." }];
+        return false;
     }
 
     /// <summary>Templates of the fragments in a hand-in (read before the server removes them).</summary>

@@ -31,13 +31,13 @@ Once the side room is open, Mechanic asks you to look into some strange rock fra
 
 - Find the **five 115-infused rock fragments** on Factory (PMC raids). They glow blue and hum as you get close.
 - Fragments you extract with are yours; the next raid only has the ones you're missing. Die with them and you lose them (like any quest item), and they come back in your next Factory raid.
-- Hand them to Mechanic for 50,000 roubles, 5,000 XP and the fragments back in the mail: they're the missing parts of the machine.
+- Hand them to Mechanic for 50,000 roubles and 5,000 XP. He keeps the fragments and fits them into the machine himself, so you never hold them again.
 
 ### 2. Build the Pack-a-Punch
 
 The machine is in the side room under an old tarp. Its hideout area appears in the area bar once the room is open.
 
-- **Needs:** the five fragments Mechanic sends back, and 115,000 roubles. **Builds in 10 seconds.**
+- **Needs:** "115 Riddles" finished, and 115,000 roubles. **Builds in 10 seconds.**
 - When it's done, Mechanic sends his regards.
 - The machine needs the hideout's power. When it's built (and after every power cut) it sits dark, its lights flickering, until you walk up and pick **Turn on**: it plays its start-up sound and blinks to life. While it runs it hums, its lights surge now and then, and it plays the Pack-a-Punch jingle every few minutes.
 

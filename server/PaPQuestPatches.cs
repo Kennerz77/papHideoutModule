@@ -26,7 +26,7 @@ internal static class PaPQuestPatches
         foreach (AbstractPatch patch in new AbstractPatch[]
                  {
                      new ClientQuestsPatch(), new WallOpenedPatch(), new HandoverPatch(),
-                     new RaidSidePatch(), new RaidLootPatch(),
+                     new RaidSidePatch(), new RaidLootPatch(), new StartUpgradePatch(),
                  })
         {
             try
@@ -62,6 +62,16 @@ internal static class PaPQuestPatches
             if (request.AreaType == HideoutAreas.EmergencyWall)
                 PaPQuestService.Instance?.TryUnlock(pmcData, sessionID, output);
         }
+    }
+
+    /// <summary>The machine can only be built once Mechanic's quest is done.</summary>
+    private sealed class StartUpgradePatch : AbstractPatch
+    {
+        protected override MethodBase? GetTargetMethod() => typeof(HideoutController).GetMethod(nameof(HideoutController.StartUpgrade));
+
+        [PatchPrefix]
+        private static bool Prefix(PmcData pmcData, HideoutUpgradeRequestData request, ItemEventRouterResponse output) =>
+            PaPQuestService.Instance?.AllowUpgrade(pmcData, request, output) ?? true;
     }
 
     /// <summary>Remembers which fragments went to Mechanic, so a partial hand-in doesn't make them respawn.</summary>
