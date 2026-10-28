@@ -9,10 +9,12 @@ using SPTarkov.Server.Core.Models.Eft.ItemEvent;
 using SPTarkov.Server.Core.Models.Eft.Quests;
 using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Enums.Hideout;
+using SPTarkov.Server.Core.Models.Spt.Config;
 using SPTarkov.Server.Core.Models.Spt.Mod;
 using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTarkov.Server.Core.Routers;
 using SPTarkov.Server.Core.Servers;
+using SPTarkov.Server.Core.Services.Items;
 using SPTarkov.Server.Core.Services.Locales;
 using SPTarkov.Server.Core.Services.Modding.Custom;
 using SPTarkov.Server.Core.Utils;
@@ -126,7 +128,9 @@ public class PaPQuestLoader(
     CustomItemService customItemService,
     TemplateTable templateTable,
     LocaleTable localeTable,
-    ImageRouter imageRouter) : IOnLoad
+    ImageRouter imageRouter,
+    ItemConfig itemConfig,
+    ItemFilterService itemFilterService) : IOnLoad
 {
     public Task OnLoadAsync(CancellationToken cancellationToken)
     {
@@ -142,11 +146,30 @@ public class PaPQuestLoader(
             AddFragment(PaPQuestInfo.QuestFragments[i], i, true, config);
             AddFragment(PaPQuestInfo.ReturnedFragments[i], i, false, config);
         }
+        BlacklistFragments();
         templateTable.Quests[PaPQuestInfo.QuestId] = BuildQuest(config);
         AddQuestLocales(config);
         PaPQuestPatches.Enable(message => logger.Error(message));
         logger.Info($"[PaP] Quest \"{config.Name}\" added ({config.Spawns.Count(s => s != null)}/{PaPQuestInfo.FragmentCount} fragment spawn points set)");
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Keeps every fragment out of random loot, daily/repeatable quest rewards, flea, traders and bot gear. They only
+    /// exist as the raid spawns the quest places and as Mechanic's mailed reward.
+    /// </summary>
+    private void BlacklistFragments()
+    {
+        var all = PaPQuestInfo.QuestFragments.Concat(PaPQuestInfo.ReturnedFragments).ToList();
+        ItemConfig items = itemConfig;
+        foreach (MongoId id in all)
+        {
+            items.Blacklist.Add(id);
+            items.LootableItemBlacklist.Add(id);
+            items.RewardItemBlacklist.Add(id);
+        }
+        itemFilterService.AddItemToBlacklistCache(all);
+        itemFilterService.AddItemToLootableBlacklistCache(all);
     }
 
     private void AddFragment(MongoId id, int index, bool questItem, PaPQuestConfig config)
