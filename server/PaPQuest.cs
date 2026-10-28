@@ -208,8 +208,10 @@ public class PaPQuestLoader(
         props.BackgroundColor = "violet";
         props.ExaminedByDefault = false; // unknown until inspected, like vanilla quest items
         props.CanSellOnRagfair = false;
-        // Traders can't buy the returned ones: they're the only way to build the machine
-        props.IsUnsaleable = !questItem;
+        // Neither version can be thrown away or sold off, or a player could lock themselves out of the machine
+        props.IsUnsaleable = true;
+        props.DiscardingBlock = true;
+        props.DiscardLimit = 0;
     }
 
     private static Quest BuildQuest(PaPQuestConfig config)
