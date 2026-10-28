@@ -464,8 +464,24 @@ public class PaPQuestService
     /// <summary>The quest list a profile sees: without our status entry, "115 Riddles" isn't there.</summary>
     public void FilterClientQuests(MongoId sessionId, List<Quest> quests)
     {
-        if (StatusOf(_profileHelper.GetPmcProfile(sessionId)) == null)
+        PmcData? pmc = _profileHelper.GetPmcProfile(sessionId);
+        if (StatusOf(pmc) == null)
             quests.RemoveAll(q => q.Id == PaPQuestInfo.QuestId);
+        else
+            RemoveLeftoverRocks(pmc!);
+    }
+
+    /// <summary>
+    /// Before 1.0.2 Mechanic mailed the rocks back. The machine no longer asks for them, so ones left in a finished
+    /// profile are cleared out (they were unsellable clutter that could still be discarded or sold).
+    /// </summary>
+    private void RemoveLeftoverRocks(PmcData pmc)
+    {
+        if (StatusOf(pmc)?.Status != QuestStatusEnum.Success || pmc.Inventory?.Items == null)
+            return;
+        int removed = pmc.Inventory.Items.RemoveAll(i => PaPQuestInfo.ReturnedFragments.Contains(i.Template));
+        if (removed > 0)
+            _logger.Info($"[PaP] {pmc.Info?.Nickname}: removed {removed} leftover 115 rock(s) from before 1.0.2");
     }
 
     /// <summary>False (with a warning in the response) when the build is started before "115 Riddles" is finished.</summary>
