@@ -32,7 +32,7 @@ namespace PaPHideoutModule
     {
         public const string PluginGuid = "com.kennerz.paphideoutmodule";
         public const string PluginName = "Kennerz-PaPHideoutModule"; // Forge rule: "Username-ModName"
-        public const string PluginVersion = "1.0.2";
+        public const string PluginVersion = "1.0.1";
 
         private const string InstanceName = "PaP_Machine (PaPHideoutModule)";
         // Looks and sound only (F12): no weapon bonuses, so it costs (and adds to a gun's price) far less

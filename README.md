@@ -2,7 +2,7 @@
 
 The Black Ops 3 Zombies **Pack-a-Punch** machine, in your SPT hideout. Find the 115 rock fragments on Factory for Mechanic, build the machine, feed it a gun and 500,000 roubles, and take it back **115 Infused**: harder hitting, faster, steadier, wearing the BO1 Pack-a-Punch camo, with the BO3 Pack-a-Punch fire sound and red-purple tracers.
 
-Version 1.0.0, for **SPT 4.1.6**.
+Version 1.0.1, for **SPT 4.1.6**.
 
 ## Requirements
 
@@ -185,4 +185,5 @@ Client (BepInEx 5, net472): `src\`, `dotnet build -c Release`. Server (SPT 4.1.6
 
 ## Changelog
 
+- **1.0.1:** the 115 rocks are quest items only: they no longer drop as random loot or daily task rewards, and Mechanic no longer mails them back. The machine now needs "115 Riddles" finished plus the roubles. If you updated from 1.0.0 and still have rocks in your inventory, delete or sell them (they're not needed any more), or remove the mod folder to start the quest fresh.
 - **1.0.0:** first release.
