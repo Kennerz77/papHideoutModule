@@ -9,6 +9,7 @@ namespace PaPHideoutModule
     {
         public const string BundleFileName = "pap_hideout.bundle";
         private const string PrefabName = "pap_machine";
+        private const string OriginsPrefabName = "pap_machine_origins";
         private const string CamoName = "pap_camo_albedo";
 
         private static AssetBundle _bundle;
@@ -74,6 +75,17 @@ namespace PaPHideoutModule
         }
 
         public static GameObject MachinePrefab => _prefab != null ? _prefab : _prefab = Load<GameObject>(PrefabName);
+
+        /// <summary>Origins camo: blue crystal for metal, its emissive glow, and the metal plating that furniture and attachments get.</summary>
+        public static Texture2D OriginsCrystal => Preloading ? null : Load<Texture2D>("origins_crystal_c");
+        public static Texture2D OriginsCrystalNormal => Preloading ? null : Load<Texture2D>("origins_crystal_n");
+        public static Texture2D OriginsCrystalGlow => Preloading ? null : Load<Texture2D>("origins_camo_e");
+        public static Texture2D OriginsMetal => Preloading ? null : Load<Texture2D>("origins_camo_c");
+
+        private static GameObject _originsPrefab;
+
+        /// <summary>The Origins stone machine (F12 > Machine model), or null if the bundle doesn't have it.</summary>
+        public static GameObject OriginsPrefab => _originsPrefab != null ? _originsPrefab : _originsPrefab = Load<GameObject>(OriginsPrefabName);
 
         public static Texture2D CamoAlbedo => _camo != null ? _camo : Preloading ? null : _camo = Load<Texture2D>(CamoName);
 
@@ -288,6 +300,9 @@ namespace PaPHideoutModule
 
         /// <summary>The machine's start-up sound, or null before the bundle is loaded.</summary>
         public static AudioClip PowerOnClip => Preloading ? null : Clip("pap_power_on");
+
+        /// <summary>Origins' own start-up (zm_tomb's tomb_pap_07); the BO3 one isn't played on that machine.</summary>
+        public static AudioClip OriginsPowerOnClip => Preloading ? null : Clip("pap_origins_power_on");
 
         public static void Unload()
         {

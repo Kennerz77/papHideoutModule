@@ -32,7 +32,7 @@ namespace PaPHideoutModule
     {
         public const string PluginGuid = "com.kennerz.paphideoutmodule";
         public const string PluginName = "Kennerz-PaPHideoutModule"; // Forge rule: "Username-ModName"
-        public const string PluginVersion = "1.0.1";
+        public const string PluginVersion = "2.0.0";
 
         private const string InstanceName = "PaP_Machine (PaPHideoutModule)";
         // Looks and sound only (F12): no weapon bonuses, so it costs (and adds to a gun's price) far less
@@ -91,9 +91,9 @@ namespace PaPHideoutModule
 
         // The machine's sequence
         private const float ReadyAt = 4f;            // gun back out on the ding of the sting
-        private const float GrabWindow = 10f;        // then the machine keeps it
+        private const float GrabWindow = 6f;         // then the machine keeps it
         private const float InteractDistance = 2.5f;
-        private const float IdleSpinSpeed = 40f, WorkingSpinSpeed = 540f;
+        private const float IdleSpinSpeed = 60f, WorkingSpinSpeed = 780f;
         private const float JingleMinInterval = 90f, JingleMaxInterval = 240f;
         private const float MaxDistance = 15f;
 
@@ -108,6 +108,15 @@ namespace PaPHideoutModule
         internal static ConfigEntry<bool> EnemyPaP;
         internal static ConfigEntry<bool> LooksOnly;
         internal static ConfigEntry<bool> MustangAndSally;
+        private static ConfigEntry<MachineModel> _machineModel;
+        private const float OriginsScale = 0.4f;
+        internal static ConfigEntry<float> TailVolume, EnemyShotVolume;
+        private static ConfigEntry<float> _originsPapping, _originsAmbient, _originsPowerOn;
+
+        /// <summary>Which machine stands in the hideout (F12 > 3. Machine). Origins plays only its own sounds.</summary>
+        internal enum MachineModel { Default, Origins }
+
+        private static bool UsingOrigins => _machineModel != null && _machineModel.Value == MachineModel.Origins;
         private ConfigEntry<float> _ambientVolume;
         private ConfigEntry<float> _workingVolume;
         private ConfigEntry<float> _jingleVolume;
@@ -164,6 +173,7 @@ namespace PaPHideoutModule
         private int _takeSecondsLeft;
         private float _spinSpeed, _spinTarget, _spinAngle;
         private float _nextJingleTime;
+        private AudioClip _defaultJingle;
 
         private readonly PaPInteractionMenu _menu = new PaPInteractionMenu();
 
@@ -173,6 +183,7 @@ namespace PaPHideoutModule
             _instanceRef = this;
             PaPAssets.BundlePath = Path.Combine(Path.GetDirectoryName(Info.Location), PaPAssets.BundleFileName);
             BindConfig();
+            PaPCamo.HookRendering();
 
             var harmony = new Harmony(PluginGuid);
             PaPPatches.Apply(harmony);
@@ -195,6 +206,11 @@ namespace PaPHideoutModule
             _acceptVolume = Config.Bind(audio, "Purchase", 0.5f, Volume("BO3's \"cha-ching\" when an upgrade is paid for."));
             VoiceVolume = Config.Bind(audio, "Voice line", 1f, Volume("Your character's \"Good work\" as the gun goes in (on top of the game's own)."));
             ShotSoundVolume = Config.Bind(audio, "Pack-a-Punch shot", 0.35f, Volume("The BO3 Pack-a-Punch layer on shots from 115 Infused guns."));
+            _originsPapping = Config.Bind(audio, "Origins machine: upgrading", 0.5f, Volume("The Origins machine's sound while a gun goes through it."));
+            _originsAmbient = Config.Bind(audio, "Origins machine: idle hum", 0.35f, Volume("The Origins machine's crystal hum while it's on (louder while it works)."));
+            _originsPowerOn = Config.Bind(audio, "Origins machine: power-on", 0.5f, Volume("The Origins machine's start-up when you turn it on."));
+            TailVolume = Config.Bind(audio, "Pack-a-Punch shot tail", 0.8f, Volume("The tail that rings after each Pack-a-Punch shot (louder on pistols, shotguns and other slow guns)."));
+            EnemyShotVolume = Config.Bind(audio, "Pack-a-Punch shot (enemies)", 1f, Volume("How loud the Pack-a-Punch shot is on enemies' 115 guns, compared with yours."));
             RockHumVolume = Config.Bind(audio, "Factory 115 rock hum", 0.05f, Volume("The hum of the 115 fragments on Factory."));
             HideoutRockHumVolume = Config.Bind(audio, "Hideout green rock hum", 0.25f, Volume("The hum of the green 115 rocks hidden in the hideout."));
             RockPickupVolume = Config.Bind(audio, "115 rock pickup", 0.1f, Volume("The sound of picking up (Factory) or investigating (hideout) a 115 rock."));
@@ -211,12 +227,76 @@ namespace PaPHideoutModule
                 "CHEAT. Turns projectiles into grenades, like good old times. A Pack-a-Punched M1911A1 still loads .45 ACP, but every shot " +
                 "leaves the barrel as a 40mm M381 HE grenade: it arcs like one and explodes on impact. Mind the blast up close.");
 
+            const string machine = "3. Machine";
+            _machineModel = Config.Bind(machine, "Machine model", MachineModel.Default,
+                "Default (Black Ops 3's Pack-a-Punch) or the stone machine from Origins. The Origins one plays only its own sounds " +
+                "(no jingle or hum).");
+
+            const string debug = "4. Debug";
+            Config.Bind(debug, "Restart 115 Riddles", false, new ConfigDescription(
+                "Starts Mechanic's quest over (for rocks that got lost, or a quest finished before the rocks were mailed back). " +
+                "Only while the Pack-a-Punch isn't built. Any rocks you hold are taken back, and Mechanic offers the job again.", null,
+                new ConfigurationManagerAttributes { HideDefaultButton = true, CustomDrawer = _ => DrawButton("Restart quest", RestartQuest) }));
+
             // Volumes apply live from the F12 menu
             Config.SettingChanged += (_, args) =>
             {
-                if (args.ChangedSetting.Definition.Section == audio)
+                string section = args.ChangedSetting.Definition.Section;
+                if (section == audio)
                     ApplyAudioSettings();
+                else if (section == machine && _instance != null)
+                    Despawn(); // the next frame puts the chosen machine in its place
             };
+        }
+
+        /// <summary>The F12 menu (BepInEx Configuration Manager) draws entries by this class's field names.</summary>
+        internal sealed class ConfigurationManagerAttributes
+        {
+            public bool? HideDefaultButton;
+            public Action<ConfigEntryBase> CustomDrawer;
+        }
+
+        private static void DrawButton(string label, Action action)
+        {
+            if (GUILayout.Button(label, GUILayout.ExpandWidth(true)))
+                action();
+        }
+
+        // Where "Bring machine to me" put it, kept across respawns while in the hideout
+        private static Vector3? _placedAt;
+        private static Quaternion _placedRotation;
+
+        private void BringMachineToPlayer()
+        {
+            HideoutPlayer player = Owner?.HideoutPlayer;
+            if (_instance == null || player == null)
+            {
+                Warn("The machine isn't in the hideout right now.");
+                return;
+            }
+            Transform body = ((Component)player).transform;
+            Vector3 look = Camera.main != null ? Camera.main.transform.forward : body.forward;
+            Vector3 flat = Vector3.ProjectOnPlane(look, Vector3.up).normalized;
+            _placedAt = body.position + flat * 2.5f;
+            // Its front (the sign / the gun slot) faces the player
+            _placedRotation = Quaternion.LookRotation(-flat, Vector3.up);
+            _instance.transform.SetPositionAndRotation(_placedAt.Value, _placedRotation);
+            Vector3 p = _placedAt.Value;
+            Log.LogInfo($"Machine brought to ({p.x:F3}, {p.y:F3}, {p.z:F3}), rotation y {_placedRotation.eulerAngles.y:F2}.");
+            Notify($"Machine moved to ({p.x:F2}, {p.y:F2}, {p.z:F2}). Fine-tune it with Unity Explorer.");
+        }
+
+        private static void RestartQuest()
+        {
+            PaPServer.Send(PaPServer.RestartQuest, (string)null, result =>
+            {
+                if (result == null)
+                    Warn("It can't reach the server.");
+                else if (result.Failed)
+                    Warn(string.IsNullOrEmpty(result.Error) ? "Mechanic won't restart the job." : result.Error);
+                else
+                    Notify("Mechanic has the 115 Riddles job open again. If it doesn't show in your quests, restart the game.");
+            });
         }
 
         private static ConfigDescription Volume(string description) =>
@@ -274,8 +354,12 @@ namespace PaPHideoutModule
             if (inHideout && _instance == null && !_loading)
                 StartCoroutine(SpawnRoutine());
             else if (!inHideout && _instance != null)
+            {
+                _placedAt = null;
                 Despawn();
+            }
 
+            PaPCamo.AnimateCrystal();
             if (_instance == null)
                 return;
 
@@ -285,12 +369,18 @@ namespace PaPHideoutModule
             PaPHideoutRocks.Tick(Owner);
 
             UpdateJingle();
+            if (UsingOrigins)
+            {
+                AnimateOrigins();
+                return;
+            }
             UpdateOffBlink();
             UpdateLitSurge();
         }
 
         private void LateUpdate()
         {
+            PaPCamo.AnimateLate();
             if (_instance == null || (_spinSpeed == 0f && _spinTarget == 0f) || !MachineVisible())
                 return;
 
@@ -300,7 +390,11 @@ namespace PaPHideoutModule
             for (int i = 0; i < _rollers.Length; i++)
             {
                 if (_rollers[i] != null)
-                    _rollers[i].localRotation *= Quaternion.AngleAxis(i == 0 ? _spinAngle : -_spinAngle * 1.6f, Vector3.right);
+                {
+                    bool origins = _rollers.Length > 2;
+                    float angle = origins ? (i < 3 ? _spinAngle : -_spinAngle) : (i == 0 ? _spinAngle : -_spinAngle * 1.6f);
+                    _rollers[i].localRotation *= Quaternion.AngleAxis(angle, Vector3.right);
+                }
             }
         }
 
@@ -504,7 +598,7 @@ namespace PaPHideoutModule
             if (withSound && _powerOn != null)
             {
                 if (_powerOn.clip == null)
-                    _powerOn.clip = PaPAssets.PowerOnClip;
+                    _powerOn.clip = PowerOnClipForModel();
                 if (_powerOn.clip != null)
                     _powerOn.Play();
                 else
@@ -728,7 +822,12 @@ namespace PaPHideoutModule
                 while (PaPAssets.Preloading)
                     yield return null;
 
-                GameObject prefab = PaPAssets.MachinePrefab;
+                GameObject prefab = UsingOrigins ? PaPAssets.OriginsPrefab : PaPAssets.MachinePrefab;
+                if (prefab == null && UsingOrigins)
+                {
+                    Log.LogWarning("The bundle has no Origins machine; using the Black Ops 3 one.");
+                    prefab = PaPAssets.MachinePrefab;
+                }
                 if (prefab != null && InHideout)
                     Spawn(prefab);
             }
@@ -743,8 +842,20 @@ namespace PaPHideoutModule
             _instance = Object.Instantiate(prefab);
             _instance.name = InstanceName;
             Machine = _instance.transform;
-            _instance.transform.localScale = Vector3.one * SavedScale;
-            _instance.transform.SetPositionAndRotation(SavedPosition, Quaternion.Euler(SavedRotation));
+            bool origins = prefab == PaPAssets.OriginsPrefab;
+            _instance.transform.localScale = Vector3.one * (origins ? OriginsScale : SavedScale);
+            _instance.transform.SetPositionAndRotation(_placedAt ?? SavedPosition, _placedAt.HasValue ? _placedRotation : Quaternion.Euler(SavedRotation));
+
+            if (origins)
+            {
+                // Its model starts about a metre above its own floor: stand it on the ground
+                Renderer[] parts = _instance.GetComponentsInChildren<Renderer>();
+                if (parts.Length > 0)
+                    _instance.transform.position += Vector3.down * (parts.Min(r => r.bounds.min.y) - _instance.transform.position.y);
+                // A tad to the viewer's left (the machine's own +X), leaving room to reach the green rock beside it
+                if (!_placedAt.HasValue)
+                    _instance.transform.position += _instance.transform.right * 0.4f;
+            }
 
             FixShaders(_instance);
             SetupColliders();
@@ -821,9 +932,12 @@ namespace PaPHideoutModule
                 smr.updateWhenOffscreen = false;
 
             Transform[] all = _instance.GetComponentsInChildren<Transform>(true);
-            _rollers = new[] { "j_rollers_large", "j_rollers_small" }
-                .Select(n => all.FirstOrDefault(t => t.name == n))
-                .ToArray();
+            // BO3: two roller groups. Origins: six rollers, the first three turning one way and the last three the other
+            string[] rollerNames = _instance.GetComponentInChildren<Animator>()?.runtimeAnimatorController?.name == "pap_machine_origins"
+                ? new[] { "roller_01_jnt", "roller_02_jnt", "roller_03_jnt", "roller_04_jnt", "roller_05_jnt", "roller_06_jnt" }
+                : new[] { "j_rollers_large", "j_rollers_small" };
+            // Origins' rollers are turned by its own anims only: spinning them on top bent the crystal strips
+            _rollers = rollerNames.Length > 2 ? new Transform[0] : rollerNames.Select(n => all.FirstOrDefault(t => t.name == n)).ToArray();
         }
 
         private void SetupGlow()
@@ -846,7 +960,9 @@ namespace PaPHideoutModule
                 if (light.name == "SignLight")
                     light.color = SignLightColor;
             }
-            _lights = _lights.Append(AddInnerLight()).Where(l => l != null).ToArray();
+            // Origins' work glow is driven on its own while a gun is being upgraded
+            _workGlow = _lights.FirstOrDefault(l => l.name == "PaP_WorkGlow");
+            _lights = _lights.Where(l => l != _workGlow).Append(AddInnerLight()).Where(l => l != null).ToArray();
             _lightIntensities = _lights.Select(l => l.intensity).ToArray();
         }
 
@@ -854,10 +970,42 @@ namespace PaPHideoutModule
         /// A soft white light just behind the rollers, so the inside of the running machine has some life. A Unity
         /// light has no visible source; only what it lights is seen. It goes on and off with the machine's own lights.
         /// </summary>
-        private static readonly Color SignLightColor = new Color(1f, 0.8f, 0.42f);
+        private static readonly Color SignLightColor = new Color(1f, 0.82f, 0.55f);
+
+        private Light _workGlow;
+        private bool _gunInside;
+        private float _crystalScroll;
+
+        /// <summary>Origins: the crystal strips flow, and the middle of the machine glows while it works.</summary>
+        private void AnimateOrigins()
+        {
+            if (_workGlow != null)
+            {
+                _workGlow.enabled = _state == MachineState.Powered;
+                // Bright from the moment the gun goes in until it comes out again
+                float target = _gunInside ? 6f : 0f;
+                _workGlow.intensity = Mathf.MoveTowards(_workGlow.intensity, target, 12f * Time.deltaTime);
+            }
+            if (_state != MachineState.Powered)
+                return;
+            _crystalScroll += Time.deltaTime * 0.12f;
+            foreach (var (material, _) in _glowing)
+            {
+                if (material == null)
+                    continue;
+                // A tighter flow: the texture repeats more often across each crystal
+                material.SetTextureScale("_MainTex", new Vector2(3f, 3f));
+                material.SetTextureScale("_EmissionMap", new Vector2(3f, 3f));
+                var offset = new Vector2(_crystalScroll * 0.3f, -_crystalScroll);
+                material.SetTextureOffset("_MainTex", offset);
+                material.SetTextureOffset("_EmissionMap", offset);
+            }
+        }
 
         private Light AddInnerLight()
         {
+            if (UsingOrigins)
+                return null;
             Transform roller = _rollers.FirstOrDefault(r => r != null);
             if (roller == null)
                 return null;
@@ -883,12 +1031,20 @@ namespace PaPHideoutModule
             _processLoop = Find("Audio_ProcessLoop");
             _sting = Find("Audio_Sting");
             _crunch = Find("Audio_Crunch");
+            // Loaded by name too, so the sounds play even if the prefab's own clip reference didn't come through
+            if (!UsingOrigins)
+            {
+                if (_sting != null && _sting.clip == null)
+                    _sting.clip = PaPAssets.Clip("pap_sting");
+                if (_crunch != null && _crunch.clip == null)
+                    _crunch.clip = PaPAssets.Clip("pap_crunch");
+            }
 
             var power = new GameObject("Audio_PowerOn");
             power.transform.SetParent(_instance.transform, false);
             power.transform.localPosition = Vector3.up * 2f;
             _powerOn = power.AddComponent<AudioSource>();
-            _powerOn.clip = PaPAssets.PowerOnClip;
+            _powerOn.clip = PowerOnClipForModel();
 
             var deny = new GameObject("Audio_Deny");
             deny.transform.SetParent(_instance.transform, false);
@@ -906,6 +1062,8 @@ namespace PaPHideoutModule
 
         private AudioSource _deny, _accept;
 
+        private static AudioClip PowerOnClipForModel() => UsingOrigins ? PaPAssets.OriginsPowerOnClip : PaPAssets.PowerOnClip;
+
         private void ApplyAudioSettings()
         {
             foreach (AudioSource source in new[] { _jingle, _processLoop, _sting, _crunch, _powerOn, _deny, _accept })
@@ -918,7 +1076,11 @@ namespace PaPHideoutModule
                 source.minDistance = 1f;
                 source.maxDistance = MaxDistance;
                 source.dopplerLevel = 0f;
-                source.volume = source == _jingle ? _jingleVolume.Value
+                // The Origins machine has its own sliders (its clips are recorded quieter than BO3's)
+                source.volume = UsingOrigins && source == _sting ? _originsPapping.Value
+                    : UsingOrigins && source == _powerOn ? _originsPowerOn.Value
+                    : UsingOrigins && source == _processLoop ? _originsAmbient.Value * (_working ? 1.6f : 1f)
+                    : source == _jingle ? _jingleVolume.Value
                     : source == _sting ? _stingVolume.Value
                     : source == _crunch ? _crunchVolume.Value
                     : source == _powerOn ? _powerOnVolume.Value
@@ -966,10 +1128,11 @@ namespace PaPHideoutModule
 
         // Where the gun travels, in the machine's own (unscaled) space: in front of the mouth, inside at the
         // rollers, pushed back out for the player, and deep enough inside that the machine keeps it
-        private static readonly Vector3 GunFront = new Vector3(0f, 2.15f, 2.0f);
-        private static readonly Vector3 GunInside = new Vector3(0f, 2.2f, 0.0f);
-        private static readonly Vector3 GunOut = new Vector3(0f, 2.15f, 0.9f);
-        private static readonly Vector3 GunGone = new Vector3(0f, 2.2f, -0.7f);
+        // (Origins' rollers sit higher and its body is deeper, so its path is its own)
+        private static Vector3 GunFront => UsingOrigins ? new Vector3(0f, 3.3f, 3.4f) : new Vector3(0f, 2.15f, 2.0f);
+        private static Vector3 GunInside => UsingOrigins ? new Vector3(0f, 3.35f, 0.6f) : new Vector3(0f, 2.2f, 0.0f);
+        private static Vector3 GunOut => UsingOrigins ? new Vector3(0f, 3.3f, 2.4f) : new Vector3(0f, 2.15f, 0.9f);
+        private static Vector3 GunGone => UsingOrigins ? new Vector3(0f, 3.35f, -0.2f) : new Vector3(0f, 2.2f, -0.7f);
 
         /// <summary>
         /// The BO3 use sequence. weapon is the original (profile) weapon that was just infused, or null for the
@@ -985,6 +1148,7 @@ namespace PaPHideoutModule
 
             // Gun goes in: sting plus a quiet crunch, flag up
             float stingStart = Time.time;
+            _flagDropped = false;
             PlayFlag("flag_up");
             if (_sting != null) _sting.Play();
             if (_crunch != null) _crunch.Play();
@@ -1022,6 +1186,7 @@ namespace PaPHideoutModule
             float take = Mathf.Max(1f, ClipLength(_animator, TakeGunState));
             float eject = Mathf.Max(1f, ClipLength(_animator, EjectGunState));
 
+            _gunInside = true;
             PlayMachine(TakeGunState);
             yield return MoveGun(GunFront, GunInside, take);
             float work = Mathf.Max(0.5f, ReadyAt - (Time.time - stingStart) - eject);
@@ -1047,7 +1212,8 @@ namespace PaPHideoutModule
                 yield break;
             }
 
-            // Back out, now wearing the camo
+            // Back out, now wearing the camo of the machine it went through
+            PaPOrigins.Set(weapon.Id, UsingOrigins);
             PaPCamo.Release(weapon.Id);
             RefreshInfusedVisuals();
             PaPApi.RaiseUpgraded(weapon);
@@ -1060,6 +1226,9 @@ namespace PaPHideoutModule
             yield return MoveGun(GunInside, GunOut, eject);
 
             // Grab window: the gun creeps back in; take it before it's gone
+            _gunInside = false;
+            // The "please wait" flag drops as the gun is out and can be taken again
+            PlayFlag("flag_down");
             _takeRequested = false;
             _canTake = true;
             float window = Mathf.Max(3f, GrabWindow);
@@ -1153,7 +1322,9 @@ namespace PaPHideoutModule
 
         private void FinishUse()
         {
-            PlayFlag("flag_down");
+            if (!_flagDropped)
+                PlayFlag("flag_down");
+            _flagDropped = false;
             PlayMachine(IdleState);
             ScheduleNextJingle();
             _busy = false;
@@ -1189,6 +1360,11 @@ namespace PaPHideoutModule
         {
             if (_jingle == null || _busy || _state != MachineState.Powered || _jingle.isPlaying || Time.time < _nextJingleTime)
                 return;
+            // Now and then (about 1 in 8) the unreleased Jebediah version plays instead
+            if (_defaultJingle == null)
+                _defaultJingle = _jingle.clip;
+            AudioClip rare = Random.value < 0.125f ? PaPAssets.Clip("pap_jebediah") : null;
+            _jingle.clip = rare != null ? rare : _defaultJingle;
             _jingle.Play();
             _nextJingleTime = Time.time + _jingle.clip.length + Random.Range(JingleMinInterval, JingleMaxInterval);
         }
@@ -1202,9 +1378,30 @@ namespace PaPHideoutModule
             yield return new WaitForSeconds(ClipLength(_animator, state));
         }
 
-        private void PlayMachine(string state) => PlayState(_animator, state);
+        private void PlayMachine(string state)
+        {
+            // The Origins machine has no idle roll of its own: its working loop, slowed down, turns the rollers at rest
+            if (UsingOrigins && _animator != null)
+            {
+                bool idle = state == IdleState;
+                if (_animator.speed > 0f)
+                    _animator.speed = idle ? OriginsIdleRoll : state == WorkingState ? OriginsWorkingRoll : 1f;
+                if (idle)
+                    state = WorkingState;
+            }
+            PlayState(_animator, state);
+        }
 
-        private void PlayFlag(string state) => PlayState(_flagAnimator, state);
+        private const float OriginsIdleRoll = 0.3f, OriginsWorkingRoll = 1.4f;
+
+        private bool _flagDropped;
+
+        private void PlayFlag(string state)
+        {
+            if (state == "flag_down" && _busy)
+                _flagDropped = true;
+            PlayState(_flagAnimator, state);
+        }
 
         private static void PlayState(Animator animator, string state)
         {

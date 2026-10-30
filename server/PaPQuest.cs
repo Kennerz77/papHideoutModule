@@ -1,12 +1,14 @@
 using SPTarkov.Common.Models.Logging;
 using SPTarkov.DI.Annotations;
 using SPTarkov.Server.Core.DI;
+using SPTarkov.Server.Core.Helpers;
 using SPTarkov.Server.Core.Helpers.Profile;
 using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Eft.Hideout;
 using SPTarkov.Server.Core.Models.Eft.ItemEvent;
+using SPTarkov.Server.Core.Models.Eft.Profile;
 using SPTarkov.Server.Core.Models.Eft.Quests;
 using SPTarkov.Server.Core.Models.Enums;
 using SPTarkov.Server.Core.Models.Enums.Hideout;
@@ -15,6 +17,8 @@ using SPTarkov.Server.Core.Models.Spt.Mod;
 using SPTarkov.Server.Core.Models.Spt.Tables;
 using SPTarkov.Server.Core.Routers;
 using SPTarkov.Server.Core.Servers;
+using SPTarkov.Server.Core.Services;
+using SPTarkov.Server.Core.Services.Commerce;
 using SPTarkov.Server.Core.Services.Items;
 using SPTarkov.Server.Core.Services.Locales;
 using SPTarkov.Server.Core.Services.Modding.Custom;
@@ -27,6 +31,7 @@ namespace PaPHideoutServer;
 /// Ids for Mechanic's "115 Riddles". Every fragment is its own template, so the server can tell which ones a player
 /// still needs. The quest-item versions are what the player finds on Factory; the "returned" versions are ordinary
 /// items Mechanic mails back as the reward (quest items live in the quest stash and can't pay for a hideout area).
+/// Neither version can be sold or discarded, and neither exists anywhere else in the game.
 /// </summary>
 public static class PaPQuestInfo
 {
@@ -309,6 +314,9 @@ public class PaPQuestLoader(
             },
             ItemReward(PaPQuestInfo.Fixed("e0", 2), PaPQuestInfo.Fixed("d0", 1), 1, Money.ROUBLES, config.RewardRoubles),
         };
+        // Mechanic mails the fragments back with his message, as ordinary items
+        for (int i = 0; i < PaPQuestInfo.FragmentCount; i++)
+            rewards.Add(ItemReward(PaPQuestInfo.Fixed("e1", i + 1), PaPQuestInfo.Fixed("d1", i + 1), i + 2, PaPQuestInfo.ReturnedFragments[i], 1, unknown: true));
         return rewards;
     }
 
@@ -389,12 +397,20 @@ public class PaPQuestService
     private readonly ProfileHelper _profileHelper;
     private readonly TemplateTable _templateTable;
     private readonly TimeUtil _timeUtil;
+    private readonly InventoryHelper _inventoryHelper;
+    private readonly MailSendService _mailSendService;
+    private readonly SaveServer _saveServer;
+    private readonly Dictionary<string, DateTime> _lastResend = [];
     private readonly object _lock = new();
     // Fragments already handed to Mechanic: gone from the inventory, but they mustn't spawn again
     private readonly IdStore _handedIn;
 
-    public PaPQuestService(ISptLogger<PaPQuestService> logger, ProfileHelper profileHelper, TemplateTable templateTable, TimeUtil timeUtil)
+    public PaPQuestService(ISptLogger<PaPQuestService> logger, ProfileHelper profileHelper, TemplateTable templateTable, TimeUtil timeUtil,
+        InventoryHelper inventoryHelper, MailSendService mailSendService, SaveServer saveServer)
     {
+        _mailSendService = mailSendService;
+        _saveServer = saveServer;
+        _inventoryHelper = inventoryHelper;
         _logger = logger;
         _profileHelper = profileHelper;
         _templateTable = templateTable;
@@ -464,24 +480,128 @@ public class PaPQuestService
     /// <summary>The quest list a profile sees: without our status entry, "115 Riddles" isn't there.</summary>
     public void FilterClientQuests(MongoId sessionId, List<Quest> quests)
     {
-        PmcData? pmc = _profileHelper.GetPmcProfile(sessionId);
-        if (StatusOf(pmc) == null)
+        // A profile whose side room is already open (a fresh one with the hideout unlocked) gets the job at once
+        PmcData? profile = _profileHelper.GetPmcProfile(sessionId);
+        TryUnlock(profile);
+        ResendMissingRocks(sessionId, profile);
+        if (StatusOf(_profileHelper.GetPmcProfile(sessionId)) == null)
             quests.RemoveAll(q => q.Id == PaPQuestInfo.QuestId);
-        else
-            RemoveLeftoverRocks(pmc!);
     }
 
     /// <summary>
-    /// Before 1.0.2 Mechanic mailed the rocks back. The machine no longer asks for them, so ones left in a finished
-    /// profile are cleared out (they were unsellable clutter that could still be discarded or sold).
+    /// F12 > Debug: starts "115 Riddles" over for a player whose rocks are lost (or who finished it in 1.0.1/1.0.2,
+    /// which sent none). Only while the machine isn't built. The old rocks go, the hand-in memory is cleared, and
+    /// the quest is offered again by Mechanic.
     /// </summary>
-    private void RemoveLeftoverRocks(PmcData pmc)
+    public ItemEventRouterResponse RestartQuest(PmcData pmc, MongoId sessionId, ItemEventRouterResponse output)
     {
-        if (StatusOf(pmc)?.Status != QuestStatusEnum.Success || pmc.Inventory?.Items == null)
+        void Refuse(string message) => output.Warnings = [new Warning { Index = 0, ErrorMessage = message }];
+
+        if (!RoomOpen(pmc))
+        {
+            Refuse("The side room isn't open yet, so Mechanic has no 115 Riddles job for you.");
+            return output;
+        }
+        BotHideoutArea? area = pmc.Hideout?.Areas?.FirstOrDefault(a => (int)a.Type == PaPAreaInfo.Type);
+        if (area?.Level is >= 1 || area?.Constructing == true)
+        {
+            Refuse("The Pack-a-Punch is already built (or being built); there is nothing to restart.");
+            return output;
+        }
+
+        QuestStatus? status = StatusOf(pmc);
+        if (status == null)
+        {
+            TryUnlock(pmc, sessionId, output);
+            return output;
+        }
+
+        var rocks = (pmc.Inventory?.Items ?? [])
+            .Where(i => PaPQuestInfo.QuestFragments.Contains(i.Template) || PaPQuestInfo.ReturnedFragments.Contains(i.Template))
+            .Select(i => i.Id)
+            .ToList();
+        foreach (MongoId id in rocks)
+            _inventoryHelper.RemoveItem(pmc, id, sessionId, output);
+
+        foreach (MongoId key in (pmc.TaskConditionCounters ?? []).Where(p => p.Value.SourceId == PaPQuestInfo.QuestId.ToString()).Select(p => p.Key).ToList())
+            pmc.TaskConditionCounters!.Remove(key);
+        lock (_lock)
+        {
+            _handedIn.For(sessionId).Clear();
+            _handedIn.Save();
+        }
+
+        status.Status = QuestStatusEnum.AvailableForStart;
+        status.StartTime = 0;
+        status.CompletedConditions = [];
+        status.StatusTimers = new Dictionary<QuestStatusEnum, double> { [QuestStatusEnum.AvailableForStart] = _timeUtil.GetTimeStamp() };
+
+        if (output.ProfileChanges != null && output.ProfileChanges.TryGetValue(sessionId, out ProfileChange? change))
+        {
+            change.QuestsStatus ??= [];
+            change.QuestsStatus.Add(status);
+        }
+        _logger.Info($"[PaP] {pmc.Info?.Nickname} restarted \"{Config.Name}\" ({rocks.Count} rock(s) removed)");
+        return output;
+    }
+
+    /// <summary>
+    /// Quest done, machine not built, and a rock gone (sold before this version, lost, thrown away): Mechanic mails it
+    /// again, and isn't polite about it. Not while one is still waiting unclaimed in the mail, and at most once an hour.
+    /// </summary>
+    private void ResendMissingRocks(MongoId sessionId, PmcData? pmc)
+    {
+        if (pmc == null || StatusOf(pmc)?.Status != QuestStatusEnum.Success)
             return;
-        int removed = pmc.Inventory.Items.RemoveAll(i => PaPQuestInfo.ReturnedFragments.Contains(i.Template));
-        if (removed > 0)
-            _logger.Info($"[PaP] {pmc.Info?.Nickname}: removed {removed} leftover 115 rock(s) from before 1.0.2");
+        BotHideoutArea? area = pmc.Hideout?.Areas?.FirstOrDefault(a => (int)a.Type == PaPAreaInfo.Type);
+        if (area?.Level is >= 1 || area?.Constructing == true)
+            return;
+
+        var have = (pmc.Inventory?.Items ?? []).Select(i => i.Template).ToHashSet();
+        try
+        {
+            // Rocks sitting unclaimed in mail count as held
+            if (_saveServer.GetProfile(sessionId)?.DialogueRecords is { } dialogues)
+            {
+                foreach (Message message in dialogues.Values.SelectMany(d => d.Messages ?? []))
+                {
+                    if (message.HasRewards == true && message.RewardCollected != true && message.Items?.Data != null)
+                        have.UnionWith(message.Items.Data.Select(i => i.Template));
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.Warning($"[PaP] Could not look through {pmc.Info?.Nickname}'s mail for rocks: {e.Message}");
+            return;
+        }
+
+        foreach (MongoId tpl in PaPQuestInfo.ReturnedFragments.Where(t => !have.Contains(t)))
+        {
+            string key = $"{sessionId}:{tpl}";
+            lock (_lock)
+            {
+                if (_lastResend.TryGetValue(key, out DateTime last) && DateTime.UtcNow - last < TimeSpan.FromHours(1))
+                    continue;
+                _lastResend[key] = DateTime.UtcNow;
+            }
+            _mailSendService.SendDirectNpcMessageToPlayer(sessionId, PaPAreaInfo.Mechanic, MessageType.MessageWithItems,
+                "Oh, you silly mercenary. Lost one of the rocks already? I've kept a spare for you. Don't lose it this time, the machine can't be fitted without it.",
+                [new Item { Id = new MongoId(), Template = tpl, Upd = new Upd { StackObjectsCount = 1 } }], 172_800, null, null);
+            _logger.Info($"[PaP] {pmc.Info?.Nickname} was missing a 115 rock; Mechanic mailed it again");
+        }
+    }
+
+    /// <summary>False (with a warning in the response) when one of these items is a 115 rock: they stay with the player.</summary>
+    public bool AllowRemove(PmcData pmc, IEnumerable<MongoId> itemIds, ItemEventRouterResponse output)
+    {
+        var ids = itemIds.ToHashSet();
+        bool rock = (pmc.Inventory?.Items ?? []).Any(i => ids.Contains(i.Id)
+            && (PaPQuestInfo.ReturnedFragments.Contains(i.Template) || PaPQuestInfo.QuestFragments.Contains(i.Template)));
+        if (!rock)
+            return true;
+        output.Warnings = [new Warning { Index = 0, ErrorMessage = "The 115 rocks can't be sold or thrown away: the machine needs them." }];
+        return false;
     }
 
     /// <summary>False (with a warning in the response) when the build is started before "115 Riddles" is finished.</summary>

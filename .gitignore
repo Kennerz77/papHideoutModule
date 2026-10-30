@@ -16,3 +16,6 @@ UnityProject/AssetBundles/
 logs/
 *.log
 .vs/
+UnityAssets/PaP/Origins/
+UnityProject/Assets/PaP/Origins/
+UnityProject/Assets/PaP/Origins.meta

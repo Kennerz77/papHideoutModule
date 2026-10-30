@@ -22,7 +22,7 @@ namespace PaPHideoutModule
         private const int LocalShooter = int.MinValue;
 
         // The tail under the shot layer: present, but never louder than the shot it closes
-        private const float TailLevel = 0.6f;
+        private const float TailLevel = 1.0f, SlowTailLevel = 1.8f; // slower guns (pistols, shotguns...) let it ring
 
         private class Shooter
         {
@@ -34,6 +34,14 @@ namespace PaPHideoutModule
 
         // Weapon template -> its own PaP shot and tail (registered by other mods)
         private static readonly Dictionary<string, (AudioClip shot, AudioClip tail)> Custom = new Dictionary<string, (AudioClip, AudioClip)>();
+
+        private static readonly HashSet<string> NoTails = new HashSet<string>();
+
+        public static void NoTail(string templateId)
+        {
+            if (!string.IsNullOrEmpty(templateId))
+                NoTails.Add(templateId);
+        }
 
         public static void Register(string templateId, AudioClip shot, AudioClip tail)
         {
@@ -65,16 +73,32 @@ namespace PaPHideoutModule
             if (!yourPlayer)
                 shooter.Shot.transform.position = shooter.Tail.transform.position = position;
 
-            Play(shooter.Shot, clip);
+            Play(shooter.Shot, clip, yourPlayer ? 1f : PaPHideoutModulePlugin.EnemyShotVolume.Value);
             // Every shot ends in the tail, quieter, and tails overlap like COD's in full auto (one-shots stack)
             AudioClip tail = own.tail ?? PaPAssets.Clip(yourPlayer ? "pap_shot_tail_plr" : "pap_shot_tail_npc");
-            if (tail != null)
-                shooter.Tail.PlayOneShot(tail, Mathf.Clamp01(PaPHideoutModulePlugin.ShotSoundVolume.Value * Presence * TailLevel));
+            if (tail != null && !NoTails.Contains(weapon.TemplateId.ToString()))
+                shooter.Tail.PlayOneShot(tail, Mathf.Clamp01(PaPHideoutModulePlugin.ShotSoundVolume.Value * Presence * (yourPlayer ? 1f : PaPHideoutModulePlugin.EnemyShotVolume.Value) * PaPHideoutModulePlugin.TailVolume.Value * (IsSlowGun(weapon) ? SlowTailLevel : TailLevel)));
         }
 
-        private static void Play(AudioSource source, AudioClip clip)
+        private static bool IsSlowGun(Weapon weapon)
         {
-            source.volume = Mathf.Clamp01(PaPHideoutModulePlugin.ShotSoundVolume.Value * Presence);
+            switch (weapon.WeapClass?.ToLowerInvariant())
+            {
+                case "assaultrifle":
+                case "assaultcarbine":
+                case "smg":
+                case "machinegun":
+                    return false;
+                case "pistol":
+                    return weapon.WeapFireType == null || !weapon.WeapFireType.Contains(Weapon.EFireMode.fullauto);
+                default:
+                    return true;
+            }
+        }
+
+        private static void Play(AudioSource source, AudioClip clip, float factor)
+        {
+            source.volume = Mathf.Clamp01(PaPHideoutModulePlugin.ShotSoundVolume.Value * Presence * factor);
             source.clip = clip;
             source.Play(); // restarts: never more than one PaP shot sound per gun
         }

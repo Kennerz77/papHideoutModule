@@ -25,6 +25,7 @@ public static class PaPImporter
     private const string TextureDir = Root + "/Textures";
     private const string MaterialDir = Root + "/Materials";
     public const string PrefabPath = Root + "/pap_machine.prefab";
+    public const string OriginsPrefabPath = Root + "/pap_machine_origins.prefab";
     private const string AudioDir = Root + "/Audio";
 
     private const string SignMaterial = "mtl_p7_zm_vending_packapunch_sign";
@@ -109,6 +110,122 @@ public static class PaPImporter
         {
             Object.DestroyImmediate(root);
         }
+    }
+
+    // ---------- Origins machine ----------
+
+    // Converted from GrayWolf's cast export by C:\Git\Tools\cast_to_se.py (see Tools\NOTES.md): the semodel, baked
+    // textures and the four castle_pap anims Origins' machine uses
+    private static readonly string OriginsDir = Path.GetFullPath(Path.Combine(Application.dataPath, "PaP/Origins"));
+    private const string OriginsModel = "p7_fxanim_zm_ori_packapunch_mod_LOD0.semodel";
+
+    /// <summary>
+    /// Builds Assets/PaP/pap_machine_origins.prefab: the Origins stone machine on the same state names, rollers and
+    /// audio objects as the BO3 one, so the plugin drives both alike. Its sounds are Origins' own (tomb_pap_*).
+    /// </summary>
+    [MenuItem("PaP/1b. Import Origins Pack-a-Punch")]
+    public static void ImportOrigins()
+    {
+        foreach (string dir in new[] { GeneratedDir, TextureDir, MaterialDir })
+            Directory.CreateDirectory(dir);
+
+        // The Origins camo's metal plating and glow are sampled on the CPU in game (the crystal-and-metal split)
+        foreach (string readable in new[] { Root + "/Camo/origins_camo_c.png", Root + "/Camo/origins_camo_e.png" })
+        {
+            AssetDatabase.ImportAsset(readable);
+            if (AssetImporter.GetAtPath(readable) is TextureImporter readableImporter && !readableImporter.isReadable)
+            {
+                readableImporter.isReadable = true;
+                readableImporter.SaveAndReimport();
+            }
+        }
+
+        // The crystal camo's facets are a normal map
+        string facets = Root + "/Camo/origins_crystal_n.png";
+        AssetDatabase.ImportAsset(facets);
+        if (AssetImporter.GetAtPath(facets) is TextureImporter facetImporter && facetImporter.textureType != TextureImporterType.NormalMap)
+        {
+            facetImporter.textureType = TextureImporterType.NormalMap;
+            facetImporter.SaveAndReimport();
+        }
+
+        var root = new GameObject("pap_machine_origins");
+        try
+        {
+            SEModel machine = SEModel.Load(Path.Combine(OriginsDir, OriginsModel));
+            Debug.Log($"[PaP] Origins machine: {machine.Bones.Count} bones, {machine.Meshes.Count} meshes, {machine.Materials.Count} materials");
+            Transform[] bones = BuildSkeleton(machine, root.transform);
+            Mesh mesh = BuildModel(machine, OriginsDir, bones, root.transform, "pap_origins_mesh", out _);
+
+            string animDir = Path.Combine(OriginsDir, "anims");
+            AnimatorController controller = BuildController("pap_machine_origins", machine, bones, root.transform, new[]
+            {
+                ("p_zm_pap_idle", (string)null, ClipMode.RestPose),
+                ("p_zm_pap_poweron", "p7_fxanim_zm_castle_pap_poweron_anim", ClipMode.OneShot),
+                ("p_zm_pap_take_gun", "p7_fxanim_zm_castle_pap_working_take_gun_anim", ClipMode.OneShot),
+                ("p_zm_pap_working", "p7_fxanim_zm_castle_pap_working_loop_anim", ClipMode.Loop),
+                ("p_zm_pap_eject_gun", "p7_fxanim_zm_castle_pap_working_eject_gun_anim", ClipMode.OneShot),
+            }, animDir, "origins_");
+            AddAnimator(root, controller);
+
+            // The crystals glow blue when the machine is on (the plugin switches emission with the machine's power)
+            foreach (string path in new[] { $"{MaterialDir}/mtl_p7_zm_ori_packapunch_crystal_off.mat" })
+            {
+                var crystal = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (crystal == null)
+                    continue;
+                // The same crystal as the gun camo: its colour map, facets and glow
+                var crystalColour = AssetDatabase.LoadAssetAtPath<Texture2D>(Root + "/Camo/origins_crystal_c.png");
+                var crystalGlow = AssetDatabase.LoadAssetAtPath<Texture2D>(Root + "/Camo/origins_camo_e.png");
+                var crystalFacets = AssetDatabase.LoadAssetAtPath<Texture2D>(Root + "/Camo/origins_crystal_n.png");
+                if (crystalColour != null)
+                    crystal.SetTexture("_MainTex", crystalColour);
+                if (crystalFacets != null)
+                {
+                    crystal.SetTexture("_BumpMap", crystalFacets);
+                    crystal.EnableKeyword("_NORMALMAP");
+                }
+                crystal.SetTexture("_EmissionMap", crystalGlow != null ? crystalGlow : crystal.GetTexture("_MainTex"));
+                crystal.SetColor("_EmissionColor", new Color(0.35f, 0.85f, 1f) * 1.4f); crystal.color = new Color(0.8f, 0.9f, 1f);
+                crystal.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                crystal.EnableKeyword("_EMISSION");
+                EditorUtility.SetDirty(crystal);
+            }
+
+            var colliders = new GameObject("Colliders").transform;
+            colliders.SetParent(root.transform, false);
+            AddBox(colliders, "Collider_Body", mesh.vertices);
+
+            // Origins' own sounds only: no jingle, no hum. Which tomb_pap clip belongs to which moment is a guess
+            AddAudio(root.transform, "Audio_Sting", "pap_origins_in.wav", false, 0.9f);
+            AddAudio(root.transform, "Audio_ProcessLoop", "pap_origins_hum.wav", true, 0.8f);
+
+            // Blue light in the cracks of the stone while it's on, and a stronger one in the middle while it works
+            AddBlueLight(root.transform, "PaP_CrackGlow", new Vector3(0f, 3.2f, 0.7f), 0.9f, 2.6f);
+            AddBlueLight(root.transform, "PaP_CrackGlow_Top", new Vector3(0f, 4.2f, 0.4f), 0.6f, 2.2f);
+            AddBlueLight(root.transform, "PaP_WorkGlow", new Vector3(0f, 3.3f, 1.4f), 0f, 3.5f);
+
+            PrefabUtility.SaveAsPrefabAsset(root, OriginsPrefabPath);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[PaP] Prefab saved: {OriginsPrefabPath} (bounds {mesh.bounds.size} m, center {mesh.bounds.center})");
+        }
+        finally
+        {
+            Object.DestroyImmediate(root);
+        }
+    }
+
+    private static void AddBlueLight(Transform root, string name, Vector3 at, float intensity, float range)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(root, false);
+        go.transform.localPosition = at;
+        var light = go.AddComponent<Light>();
+        light.type = LightType.Point;
+        light.color = new Color(0.3f, 0.65f, 1f);
+        light.intensity = intensity;
+        light.range = range;
+        light.shadows = LightShadows.None;
     }
 
     private static void AddAnimator(GameObject go, AnimatorController controller)
@@ -301,7 +418,7 @@ public static class PaPImporter
         var light = go.AddComponent<Light>();
         light.type = LightType.Point;
         light.color = new Color(1f, 0.8f, 0.42f); // warm yellow like the BO3 machine (the plugin sets it too)
-        light.intensity = 1.6f;
+        light.intensity = 0.8f;
         light.range = 4f; // plugin multiplies by the machine's scale
         light.shadows = LightShadows.None;
     }
@@ -369,7 +486,7 @@ public static class PaPImporter
         if (se.Name == SignMaterial && albedo != null)
         {
             mat.SetTexture("_EmissionMap", albedo);
-            mat.SetColor("_EmissionColor", new Color(0.9f, 0.85f, 0.85f));
+            mat.SetColor("_EmissionColor", new Color(0.55f, 0.52f, 0.52f)); // dimmer than the BO3 sign: Tarkov's hideout is dark and it bloomed to white
             mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             mat.EnableKeyword("_EMISSION");
         }
@@ -395,9 +512,9 @@ public static class PaPImporter
     private static Texture2D ImportTexture(string source, TextureImporterType type, bool srgb)
     {
         string assetPath = $"{TextureDir}/{Path.GetFileName(source)}";
-        if (!File.Exists(assetPath))
+        if (!File.Exists(assetPath) || File.GetLastWriteTimeUtc(source) > File.GetLastWriteTimeUtc(assetPath))
         {
-            File.Copy(source, assetPath);
+            File.Copy(source, assetPath, true);
             AssetDatabase.ImportAsset(assetPath);
         }
 
@@ -449,7 +566,7 @@ public static class PaPImporter
     // ---------- Animation ----------
 
     private static AnimatorController BuildController(string name, SEModel model, Transform[] bones, Transform root,
-        (string state, string anim, ClipMode mode)[] states)
+        (string state, string anim, ClipMode mode)[] states, string animDir = AnimDir, string clipPrefix = "")
     {
         // tag_origin carries delta root motion / placement in BO3 anims; the object itself must stay put
         Transform[] animated = bones.Where(b => b.name != "tag_origin").ToArray();
@@ -461,9 +578,9 @@ public static class PaPImporter
 
         foreach (var (state, animName, mode) in states)
         {
-            SEAnim anim = animName != null ? SEAnim.Load(Path.Combine(AnimDir, animName + ".seanim")) : null;
+            SEAnim anim = animName != null ? SEAnim.Load(Path.Combine(animDir, animName + ".seanim")) : null;
             AnimatorState s = sm.AddState(state);
-            s.motion = BuildClip(state, anim, mode, model, animated, root);
+            s.motion = BuildClip(state, anim, mode, model, animated, root, clipPrefix);
             if (sm.defaultState == null)
                 sm.defaultState = s;
         }
@@ -473,7 +590,8 @@ public static class PaPImporter
     /// <summary>
     /// Every animated bone gets full position + rotation curves so switching states always restores the pose.
     /// </summary>
-    private static AnimationClip BuildClip(string name, SEAnim anim, ClipMode mode, SEModel model, Transform[] animated, Transform root)
+    private static AnimationClip BuildClip(string name, SEAnim anim, ClipMode mode, SEModel model, Transform[] animated, Transform root,
+        string clipPrefix)
     {
         float fps = anim != null && anim.FrameRate > 0f ? anim.FrameRate : 30f;
         float length = anim != null && mode != ClipMode.HoldLastFrame ? Mathf.Max(1, anim.FrameCount - 1) / fps : 1f;
@@ -529,7 +647,7 @@ public static class PaPImporter
         settings.loopTime = mode == ClipMode.Loop || mode == ClipMode.RestPose || mode == ClipMode.HoldLastFrame;
         AnimationUtility.SetAnimationClipSettings(clip, settings);
 
-        string clipPath = $"{GeneratedDir}/{name}.anim";
+        string clipPath = $"{GeneratedDir}/{clipPrefix}{name}.anim";
         AssetDatabase.DeleteAsset(clipPath);
         AssetDatabase.CreateAsset(clip, clipPath);
         Debug.Log($"[PaP] Clip {name}: {clip.length:F2}s @ {fps}fps ({mode})");
@@ -568,7 +686,7 @@ public static class PaPImporter
             {
                 int i = y * w + x;
                 Color s = spec.GetPixelBilinear((x + 0.5f) / w, (y + 0.5f) / h);
-                Color c = (pixels[i] + s * 1.1f) * 1.35f;
+                Color c = pixels[i] + s * SpecWeight;
                 c = Pop(new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b)));
                 c.a = 1f;
                 pixels[i] = c;
@@ -589,7 +707,9 @@ public static class PaPImporter
     }
 
     private const float CamoSaturation = 1.4f;
-    private const float TraceLift = 1.3f, MetalLift = 0.9f;
+    private const float TraceLift = 1.4f, MetalLift = 0.75f;
+    // How much of the spec map is added to the colour map: the BO1 camo is near-black metal with glinting traces
+    private const float SpecWeight = 0.5f;
 
     /// <summary>
     /// Makes the camo read in Tarkov's lighting: the circuit traces get more saturated and brighter, the grey metal a

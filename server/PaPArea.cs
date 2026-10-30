@@ -121,9 +121,12 @@ public class PaPAreaLoader(
     {
         hideoutTable.Areas.RemoveAll(a => a.Id == PaPAreaInfo.Id);
 
-        // The rocks never reach the player's stash, so they can't be sold or lost: finishing "115 Riddles" is the gate,
+        // The fragments Mechanic mails back after "115 Riddles" are the missing assembly, plus some money. They can't be
+        // sold or discarded and exist nowhere else in the game (see PaPQuestLoader). Finishing the quest is also
         // enforced by a server patch (the game's area requirements have no quest type).
-        List<StageRequirement> requirements = [];
+        List<StageRequirement> requirements = PaPQuestInfo.ReturnedFragments
+            .Select(tpl => ItemRequirement(tpl, 1))
+            .ToList();
         if (Config.BuildRoubles > 0)
             requirements.Add(ItemRequirement(Money.ROUBLES, Config.BuildRoubles));
 

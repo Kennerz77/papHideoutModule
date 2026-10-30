@@ -58,6 +58,7 @@ public static class PaPBundleTools
                 assetNames = new[]
                 {
                     PaPImporter.PrefabPath,
+                    PaPImporter.OriginsPrefabPath,
                     PaPImporter.CamoAlbedoPath,
                     // The 115 rock fragments ("115 Riddles"): loaded by name, pap_rock_1..5
                     PaPRockBuilder.PrefabPath(0),
@@ -89,6 +90,14 @@ public static class PaPBundleTools
                     // Loaded by name: the machine's start-up and the 115 rocks' hum (loose WAVs next to the DLL
                     // loaded fine but played silent)
                     "Assets/PaP/Audio/pap_power_on.wav",
+                    "Assets/PaP/Audio/pap_origins_power_on.wav",
+                    "Assets/PaP/Audio/pap_jebediah.ogg",
+                    "Assets/PaP/Audio/pap_sting.wav",
+                    "Assets/PaP/Audio/pap_crunch.wav",
+                    "Assets/PaP/Camo/origins_crystal_c.png",
+                    "Assets/PaP/Camo/origins_crystal_n.png",
+                    "Assets/PaP/Camo/origins_camo_e.png",
+                    "Assets/PaP/Camo/origins_camo_c.png",
                     "Assets/PaP/Audio/pap_rock_hum.wav",
                     // The hideout's green 115 rocks: the rock, its pickup sound, and the song the radio plays
                     PaPRockBuilder.GreenPrefabPath,
@@ -118,6 +127,7 @@ public static class PaPBundleTools
         try
         {
             PaPImporter.ImportAll();
+            PaPImporter.ImportOrigins();
             PaPRockBuilder.BuildAll();
             if (BuildBundle() == null)
                 EditorApplication.Exit(1);

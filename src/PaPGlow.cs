@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using EFT.InventoryLogic;
 using EFT.UI.DragAndDrop;
 using UnityEngine;
 using UnityEngine.UI;
@@ -21,6 +22,19 @@ namespace PaPHideoutModule
         private readonly List<float> _samples = new List<float>(256);
 
         private const string FillName = "PaPFill";
+
+        private static readonly Dictionary<string, Color> Colors = new Dictionary<string, Color>();
+
+        internal static void SetColor(string templateId, Color color)
+        {
+            if (!string.IsNullOrEmpty(templateId))
+                Colors[templateId] = color;
+        }
+
+        private static Color ColorFor(Item item) =>
+            item != null && Colors.TryGetValue(item.TemplateId.ToString(), out Color own) ? own : PaPHideoutModulePlugin.GlowColor;
+
+        private Color _tint = PaPHideoutModulePlugin.GlowColor;
 
         internal static void Attach(ItemView itemView, bool infused)
         {
@@ -58,6 +72,7 @@ namespace PaPHideoutModule
                 glow.raycastTarget = false;
             }
 
+            glow._tint = ColorFor(itemView.Item);
             glow.transform.SetAsLastSibling();
             glow.gameObject.SetActive(true);
             glow.SetVerticesDirty();
@@ -99,7 +114,7 @@ namespace PaPHideoutModule
                 fill.raycastTarget = false;
             }
 
-            Color color = PaPHideoutModulePlugin.GlowColor;
+            Color color = ColorFor(itemView.Item);
             color.a = PaPHideoutModulePlugin.FillOpacity;
             fill.color = color;
             fill.gameObject.SetActive(true);
@@ -126,7 +141,7 @@ namespace PaPHideoutModule
             if (r.width < 2f || r.height < 2f)
                 return;
 
-            Color color = PaPHideoutModulePlugin.GlowColor;
+            Color color = _tint;
             float perimeter = 2f * (r.width + r.height);
             float lap = Mathf.Max(0.1f, PaPHideoutModulePlugin.GlowLapSeconds);
             float head = Mathf.Repeat(Time.unscaledTime / lap, 1f) * perimeter;

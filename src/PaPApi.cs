@@ -40,6 +40,44 @@ namespace PaPHideoutModule
         public static void ExcludeFromCamo(string templateId) => PaPCamo.Exclude(templateId);
 
         /// <summary>
+        /// Parts whose material name contains one of these words keep their own look on an infused gun (cables, boxes...).
+        /// Every other material whose name contains <paramref name="metalLikeWord"/> is painted even if its name says
+        /// wood or plastic (a mod gun's own parts are made of whatever it says; its camo rule is yours).
+        /// </summary>
+        public static void KeepMaterialsPlain(string metalLikeWord, params string[] words) => PaPCamo.KeepPlain(metalLikeWord, words);
+
+        /// <summary>
+        /// On a gun upgraded in the Origins machine: materials whose name contains <paramref name="materialWord"/> get the
+        /// blue crystal (<paramref name="crystal"/>) or the metal plating. Without a rule, metal parts are crystal and
+        /// furniture and attachments plating.
+        /// </summary>
+        /// <summary>True for a gun that was upgraded in the Origins machine (its camo is the Origins one).</summary>
+        public static bool IsOriginsGun(Item item) => item != null && PaPCamo.OnInfusedGun(item) && PaPCamo.OnOriginsGun(item);
+
+        /// <summary>On an Origins gun, materials with this word in their name keep their plain look (a dial's face).</summary>
+        /// <summary>An alpha-tested material (normally never painted) that does take the Origins camo.</summary>
+        public static void PaintCutoutOnOrigins(string materialWord) => PaPCamo.PaintCutoutOnOrigins(materialWord);
+
+        /// <summary>
+        /// On an Origins gun, a material with this word in its name is split per texel: its red takes the blue crystal
+        /// and everything else the metal plating (a red-bodied gun whose black and grey parts share the material).
+        /// </summary>
+        public static void SplitOnRed(string materialWord) => PaPCamo.SplitOnRed(materialWord);
+
+        public static void KeepOriginsPlain(string materialWord) => PaPCamo.KeepOriginsPlain(materialWord);
+
+        /// <summary>This weapon plays its own shot sound only: no Pack-a-Punch shot tail on top.</summary>
+        public static void NoShotTail(string templateId) => PaPShotAudio.NoTail(templateId);
+
+        public static void SetOriginsLook(string materialWord, bool crystal) => PaPCamo.SetOriginsLook(materialWord, crystal);
+
+        /// <summary>Like <see cref="SetOriginsLook"/>, but by the name of the part's renderer (for parts that share a material with the rest).</summary>
+        public static void SetOriginsPartLook(string rendererWord, bool crystal) => PaPCamo.SetOriginsPartLook(rendererWord, crystal);
+
+        /// <summary>The colour of this weapon's inventory glow and cell tint when infused (PaP's purple by default).</summary>
+        public static void SetGlowColor(string templateId, Color color) => PaPGlow.SetColor(templateId, color);
+
+        /// <summary>
         /// The weapon template's own name when infused (e.g. "Zeus Cannon"), in place of the "(115 Infused)" suffix.
         /// <paramref name="shortName"/> is used where the game shows short names; the name itself if left out.
         /// </summary>

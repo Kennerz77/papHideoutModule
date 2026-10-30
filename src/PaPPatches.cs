@@ -89,6 +89,9 @@ namespace PaPHideoutModule
             // hideout sets its areas up
             Prefix(harmony, AccessTools.PropertyGetter(typeof(HideoutAreasInfo), nameof(HideoutAreasInfo.Templates)), nameof(AreaTemplatesPrefix));
             Prefix(harmony, AccessTools.Method(typeof(HideoutController), nameof(HideoutController.HideoutAwake)), nameof(HideoutAwakePrefix));
+            // Walking up to the machine must not offer the area's "go to module" prompt: it clashes with the machine's
+            // own menu (a gun inside the machine would be left behind). The bird's-eye view's area icon stays
+            Prefix(harmony, AccessTools.Method(typeof(HideoutPlayerOwner), nameof(HideoutPlayerOwner.HideoutAreaInteraction)), nameof(AreaInteractionPrefix));
             // The construction requirements draw the fragments' pictures even before they're found: "?" like any
             // unknown item until the player has examined one
             Patch(harmony, AccessTools.Method(typeof(HideoutItemView), nameof(HideoutItemView.UpdateInfo)), nameof(RequirementViewPostfix));
@@ -372,6 +375,9 @@ namespace PaPHideoutModule
             CurrentOwner = __instance;
             PaPHideoutRocks.NewVisit();
         }
+
+        private static bool AreaInteractionPrefix(HideoutArea area, bool inSight) =>
+            !(inSight && area != null && area.AreaTemplate != null && area.AreaTemplate.Type == PaPArea.Type);
 
         private static void AreaTemplatesPrefix(HideoutAreasInfo __instance)
         {
@@ -704,7 +710,7 @@ namespace PaPHideoutModule
 
         // Bumped to retire cached pictures: "PaP8" the washed-out rocks of older builds; "PaP9"/"PLN4" (1.1.0) guns and
         // parts photographed with camo stuck on (a part's own copy of a painted material, which 1.0.0 couldn't undo)
-        private const int IconSalt = 0x50615039; // "PaP9"
+        private const int IconSalt = 0x5061503D; // bumped: the camo rules changed, so every picture is redone
         private const int PlainPartSalt = 0x504C4E34; // "PLN4"
 
         // Icons are cached by hash; anything that changes the camo on any part of the item must change the hash, or
@@ -735,7 +741,7 @@ namespace PaPHideoutModule
                 // saved to its disk cache under older PaP versions. Before the camo texture is loaded the plain hash is
                 // kept, so a picture taken then is never cached as the camo one
                 if (PaPCamo.OnInfusedGun(item) && PaPAssets.CamoReady)
-                    __result = __result * 31 + 115115 + IconSalt;
+                    __result = __result * 31 + 115115 + IconSalt + (PaPCamo.OnOriginsGun(item) ? 0x0B15 : 0);
                 // Parts, mags and the like off a gun: older builds could photograph them still wearing the camo of the
                 // gun they came from and cache that as their plain picture (also on disk, and in trader screens); a
                 // plain salt retires those once

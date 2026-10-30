@@ -25,7 +25,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "PaPHideoutModule"; // letters and numbers only (Forge rule)
     public string Author { get; init; } = "Kennerz";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("1.0.1");
+    public SemanticVersioning.Version Version { get; init; } = new("2.0.0");
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.0");
     public List<string>? Incompatibilities { get; init; }
     /// <summary>Hideout Uncensored provides weapons in the hideout, which the machine needs (the client depends on it too).</summary>
@@ -67,12 +67,14 @@ public record PaPState(
 /// infused gun.)
 /// </summary>
 [Injectable(TypePriority = OnLoadOrder.Routers)]
-public class PaPItemEventRouter(PaPService service) : ItemEventRouter([
+public class PaPItemEventRouter(PaPService service, PaPQuestService questService) : ItemEventRouter([
     Route(PaPService.UpgradeAction, service.Upgrade),
     Route(PaPService.StripAction, service.Strip),
     Route(PaPService.DestroyAction, service.Destroy),
     Route(PaPService.BotLootAction, service.BotLoot),
     Route(PaPService.BuiltAction, service.Built),
+    new ItemRouteAction<PaPItemRequest>(PaPService.RestartQuestAction, (url, pmcData, body, sessionID, output, cancellationToken) =>
+        ValueTask.FromResult(questService.RestartQuest(pmcData, sessionID, output))),
 ])
 {
     private static ItemRouteAction<PaPItemRequest> Route(string action,
@@ -142,6 +144,7 @@ public class PaPService
     public const string DestroyAction = "PaPDestroy";
     public const string BotLootAction = "PaPBotLoot";
     public const string BuiltAction = "PaPBuilt";
+    public const string RestartQuestAction = "PaPRestartQuest";
     public const int Cost = 500_000;
     public const int CosmeticCost = 5_000; // looks and sound only: no weapon bonuses
 

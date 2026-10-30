@@ -17,6 +17,7 @@ namespace PaPHideoutModule
         public const string Destroy = "PaPDestroy";
         public const string Built = "PaPBuilt";
         public const string BotLoot = "PaPBotLoot";
+        public const string RestartQuest = "PaPRestartQuest";
 
         /// <summary>done receives null if the request couldn't be sent.</summary>
         public static void Send(string action, string itemId, Action<IResult> done) =>

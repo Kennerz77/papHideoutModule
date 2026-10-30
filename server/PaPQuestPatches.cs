@@ -7,6 +7,8 @@ using SPTarkov.Server.Core.Models.Common;
 using SPTarkov.Server.Core.Models.Eft.Common;
 using SPTarkov.Server.Core.Models.Eft.Common.Tables;
 using SPTarkov.Server.Core.Models.Eft.Hideout;
+using SPTarkov.Server.Core.Models.Eft.Inventory;
+using SPTarkov.Server.Core.Models.Eft.Trade;
 using SPTarkov.Server.Core.Models.Eft.ItemEvent;
 using SPTarkov.Server.Core.Models.Eft.Match;
 using SPTarkov.Server.Core.Models.Eft.Quests;
@@ -27,6 +29,7 @@ internal static class PaPQuestPatches
                  {
                      new ClientQuestsPatch(), new WallOpenedPatch(), new HandoverPatch(),
                      new RaidSidePatch(), new RaidLootPatch(), new StartUpgradePatch(),
+                     new DiscardPatch(), new SellPatch(),
                  })
         {
             try
@@ -61,6 +64,34 @@ internal static class PaPQuestPatches
         {
             if (request.AreaType == HideoutAreas.EmergencyWall)
                 PaPQuestService.Instance?.TryUnlock(pmcData, sessionID, output);
+        }
+    }
+
+    /// <summary>The 115 rocks can't be thrown away: the item's own flags aren't enough on this client.</summary>
+    private sealed class DiscardPatch : AbstractPatch
+    {
+        protected override MethodBase? GetTargetMethod() => typeof(InventoryController).GetMethod(nameof(InventoryController.DiscardItem));
+
+        [PatchPrefix]
+        private static bool Prefix(PmcData pmcData, InventoryRemoveRequestData request, ItemEventRouterResponse output) =>
+            PaPQuestService.Instance?.AllowRemove(pmcData, [request.Item], output) ?? true;
+    }
+
+    /// <summary>...or sold to a trader.</summary>
+    private sealed class SellPatch : AbstractPatch
+    {
+        protected override MethodBase? GetTargetMethod() => typeof(TradeController).GetMethod(nameof(TradeController.ConfirmTrading));
+
+        [PatchPrefix]
+        private static bool Prefix(PmcData pmcData, ProcessBaseTradeRequestData request, ref ItemEventRouterResponse __result)
+        {
+            if (request is not ProcessSellTradeRequestData sell || sell.Items == null)
+                return true;
+            var output = new ItemEventRouterResponse { ProfileChanges = [], Warnings = [] };
+            if (PaPQuestService.Instance?.AllowRemove(pmcData, sell.Items.Select(i => i.Id).ToList(), output) ?? true)
+                return true;
+            __result = output;
+            return false;
         }
     }
 
