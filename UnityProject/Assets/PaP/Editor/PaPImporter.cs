@@ -114,7 +114,7 @@ public static class PaPImporter
 
     // ---------- Origins machine ----------
 
-    // Converted from GrayWolf's cast export by C:\Git\Tools\cast_to_se.py (see Tools\NOTES.md): the semodel, baked
+    // Converted from GrayWolf's cast export by C:\Git\99_Tools\cast_to_se.py (see Tools\CONTEXT.md): the semodel, baked
     // textures and the four castle_pap anims Origins' machine uses
     private static readonly string OriginsDir = Path.GetFullPath(Path.Combine(Application.dataPath, "PaP/Origins"));
     private const string OriginsModel = "p7_fxanim_zm_ori_packapunch_mod_LOD0.semodel";
