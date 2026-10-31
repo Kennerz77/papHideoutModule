@@ -2,7 +2,7 @@
 
 The Call of Duty Zombies **Pack-a-Punch** machine, in your SPT hideout. Do Mechanic's quest, build the machine, feed it a gun and roubles, and take it back **115 Infused**. It hits harder, fires faster and kicks less, with the Pack-a-Punch camo, fire sound, tracers and red muzzle smoke.
 
-Version 2.1.0, for **SPT 4.1.6**. Made by **Kennerz**.
+Version 2.1.1, for **SPT 4.1.6**. Made by **Kennerz**.
 
 **Making a gun mod?** See **[API.md](API.md)** to make your weapon work with the machine.
 
@@ -104,6 +104,7 @@ This is a free, non-commercial fan mod. All Call of Duty assets belong to their 
 
 ## Changelog
 
+- **2.1.1:** Fixed: Mustang & Sally grenades have their wider blast again (it was switched off on this game version).
 - **2.1.0:**
   - **Re-pack:** re-insert an upgraded gun in the other machine for 5,000 roubles to swap its camo. This works on the Ray Gun and Thundergun too.
   - **Insurance:** insured 115 guns come back still upgraded.

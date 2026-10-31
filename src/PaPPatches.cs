@@ -45,7 +45,9 @@ namespace PaPHideoutModule
             // Mustang & Sally: a Pack-a-Punched M1911A1 fires 40mm grenades, faster and with a wider blast and a bigger
             // explosion than the launcher's (only its own: launcher rounds stay vanilla)
             Prefix(harmony, AccessTools.Method(typeof(BallisticsCalculator), nameof(BallisticsCalculator.CreateShot)), nameof(CreateShotPrefix));
-            Prefix(harmony, AccessTools.Method(typeof(Grenade), nameof(Grenade.Explosion)), nameof(GrenadeExplosionPrefix));
+            // The static overload (it takes the explosive item); Grenade.Explosion() with no arguments has none to swap
+            Prefix(harmony, AccessTools.GetDeclaredMethods(typeof(Grenade)).FirstOrDefault(m =>
+                m.Name == nameof(Grenade.Explosion) && m.IsStatic && m.GetParameters().Any(p => p.Name == "grenadeItem")), nameof(GrenadeExplosionPrefix));
             Prefix(harmony, AccessTools.Method(typeof(ClientGameWorld), nameof(ClientGameWorld.ShotDelegate)), nameof(ShotDelegatePrefix));
             Patch(harmony, AccessTools.Method(typeof(ClientGameWorld), nameof(ClientGameWorld.ShotDelegate)), nameof(ShotDelegatePostfix));
             Prefix(harmony, AccessTools.Method(typeof(Systems.Effects.Effects), nameof(Systems.Effects.Effects.EmitGrenade)), nameof(EmitGrenadePrefix));
