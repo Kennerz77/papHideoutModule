@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using PaP.SEFormats;
@@ -44,8 +44,10 @@ public static class PaPImporter
     private enum ClipMode { RestPose, OneShot, Loop, HoldLastFrame }
 
     public const string CamoAlbedoPath = Root + "/Camo/pap_camo_albedo.png";
+    public const string CamoSpecPath = Root + "/Camo/pap_camo_spec.png";
     private const string CamoColorPath = Root + "/Camo/pap_camo_c.png";
-    private const string CamoSpecPath = Root + "/Camo/pap_camo_s.png";
+    private const string CamoSpecSourcePath = Root + "/Camo/pap_camo_s.png";
+    private const string CamoGlossPath = Root + "/Camo/pap_camo_g.png";
 
     [MenuItem("PaP/1. Import BO3 Pack-a-Punch")]
     public static void ImportAll()
@@ -668,33 +670,47 @@ public static class PaPImporter
     // ---------- Weapon camo ----------
 
     /// <summary>
-    /// The BO1 PaP colour map is near-black; its red/blue circuit pattern lives in the specular map.
-    /// Tarkov's weapon shaders only take our albedo, so bake some of the pattern into it to keep the look.
+    /// The BO1 PaP colour map is near-black; its red circuit pattern lives in the specular map (built separately, see
+    /// BuildCamoSpec). A faint trace of the circuitry goes onto the colour map too, so it still reads in dim light.
     /// </summary>
     private static void BuildCamoAlbedo()
     {
         var color = new Texture2D(2, 2, TextureFormat.RGBA32, false, false);
         color.LoadImage(File.ReadAllBytes(CamoColorPath));
         var spec = new Texture2D(2, 2, TextureFormat.RGBA32, false, false);
-        spec.LoadImage(File.ReadAllBytes(CamoSpecPath));
+        spec.LoadImage(File.ReadAllBytes(CamoSpecSourcePath));
 
-        int w = color.width, h = color.height;
-        Color[] pixels = color.GetPixels();
+        // Twice the source size, so the traces can be trimmed to their middles without breaking up
+        int w = CamoSize, h = CamoSize;
+        var trace = new float[w * h];
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                Color s = spec.GetPixelBilinear((x + 0.5f) / w, (y + 0.5f) / h);
+                trace[y * w + x] = s.r - Mathf.Max(s.g, s.b) > 0.12f ? 1f : 0f;
+            }
+        }
+        // Softened, then cut: only the middle of each trace stays red, the lines stay joined
+        trace = Blur(trace, w, h, TraceSoften);
+        var pixels = new Color[w * h];
         for (int y = 0; y < h; y++)
         {
             for (int x = 0; x < w; x++)
             {
                 int i = y * w + x;
-                Color s = spec.GetPixelBilinear((x + 0.5f) / w, (y + 0.5f) / h);
-                Color c = pixels[i] + s * SpecWeight;
-                c = Pop(new Color(Mathf.Clamp01(c.r), Mathf.Clamp01(c.g), Mathf.Clamp01(c.b)));
+                float t = Mathf.Clamp01((trace[i] - TraceCut) / 0.2f);
+                Color c = Color.Lerp(color.GetPixelBilinear((x + 0.5f) / w, (y + 0.5f) / h) * BaseDarken, TraceColor, t);
                 c.a = 1f;
                 pixels[i] = c;
             }
         }
-        color.SetPixels(pixels);
-        File.WriteAllBytes(CamoAlbedoPath, color.EncodeToPNG());
+        var output = new Texture2D(w, h, TextureFormat.RGBA32, false, false);
+        output.SetPixels(pixels);
+        File.WriteAllBytes(CamoAlbedoPath, output.EncodeToPNG());
+        Object.DestroyImmediate(output);
         Object.DestroyImmediate(color);
+        BuildCamoSpec(spec);
         Object.DestroyImmediate(spec);
 
         AssetDatabase.ImportAsset(CamoAlbedoPath);
@@ -702,27 +718,88 @@ public static class PaPImporter
         importer.wrapMode = TextureWrapMode.Repeat;
         importer.mipmapEnabled = true;
         importer.sRGBTexture = true;
+        importer.maxTextureSize = CamoSize;
         importer.SaveAndReimport();
         Debug.Log($"[PaP] Camo albedo built: {CamoAlbedoPath}");
     }
 
-    private const float CamoSaturation = 1.4f;
-    private const float TraceLift = 1.4f, MetalLift = 0.75f;
-    // How much of the spec map is added to the colour map: the BO1 camo is near-black metal with glinting traces
-    private const float SpecWeight = 0.5f;
-
     /// <summary>
-    /// Makes the camo read in Tarkov's lighting: the circuit traces get more saturated and brighter, the grey metal a
-    /// little darker, so the contrast carries it. Brightness rolls off softly above 0.85 instead of clipping.
+    /// BO1's own specular map (the shiny red-copper traces and grey glints) with its gloss map in the alpha: the gun's
+    /// spec map on the default camo, so the circuitry shows in the highlights and reflections the way BO1's does.
     /// </summary>
-    private static Color Pop(Color c)
+    private static void BuildCamoSpec(Texture2D spec)
     {
-        Color.RGBToHSV(c, out float h, out float s, out float v);
-        v *= Mathf.Lerp(MetalLift, TraceLift, Mathf.Clamp01(s * 2f));
-        if (v > 0.85f)
-            v = 0.85f + 0.15f * (float)System.Math.Tanh((v - 0.85f) / 0.15f);
-        return Color.HSVToRGB(h, Mathf.Clamp01(s * CamoSaturation), v);
+        var gloss = new Texture2D(2, 2, TextureFormat.RGBA32, false, false);
+        gloss.LoadImage(File.ReadAllBytes(CamoGlossPath));
+        int w = spec.width, h = spec.height;
+        Color[] pixels = spec.GetPixels();
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                int i = y * w + x;
+                // Red-copper traces shine; the grey between them is only a low sheen, so the base stays black
+                Color s = pixels[i];
+                float trace = Mathf.Clamp01((s.r - Mathf.Max(s.g, s.b)) * TraceGain);
+                Color c = Color.Lerp(s * SpecBase, s * SpecBoost, trace);
+                c.a = gloss.GetPixelBilinear((x + 0.5f) / w, (y + 0.5f) / h).r;
+                pixels[i] = c;
+            }
+        }
+        var output = new Texture2D(w, h, TextureFormat.RGBA32, false, false);
+        output.SetPixels(pixels);
+        File.WriteAllBytes(CamoSpecPath, output.EncodeToPNG());
+        Object.DestroyImmediate(output);
+        Object.DestroyImmediate(gloss);
+
+        AssetDatabase.ImportAsset(CamoSpecPath);
+        var importer = (TextureImporter)AssetImporter.GetAtPath(CamoSpecPath);
+        importer.wrapMode = TextureWrapMode.Repeat;
+        importer.mipmapEnabled = true;
+        importer.sRGBTexture = true;
+        importer.alphaIsTransparency = false;
+        importer.SaveAndReimport();
+        Debug.Log($"[PaP] Camo spec built: {CamoSpecPath}");
     }
+
+    /// <summary>Gaussian blur (separable, wrapping: the camo tiles).</summary>
+    private static float[] Blur(float[] src, int w, int h, float sigma)
+    {
+        int r = Mathf.CeilToInt(sigma * 3f);
+        var kernel = new float[2 * r + 1];
+        float sum = 0f;
+        for (int k = -r; k <= r; k++)
+            sum += kernel[k + r] = Mathf.Exp(-k * k / (2f * sigma * sigma));
+        for (int k = 0; k < kernel.Length; k++)
+            kernel[k] /= sum;
+        var tmp = new float[src.Length];
+        var dst = new float[src.Length];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float v = 0f;
+                for (int k = -r; k <= r; k++)
+                    v += src[y * w + ((x + k) % w + w) % w] * kernel[k + r];
+                tmp[y * w + x] = v;
+            }
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+            {
+                float v = 0f;
+                for (int k = -r; k <= r; k++)
+                    v += tmp[((y + k) % h + h) % h * w + x] * kernel[k + r];
+                dst[y * w + x] = v;
+            }
+        return dst;
+    }
+
+    // BO1's blue-black colour map with only faint dark-red traces: the circuitry mostly shows in the highlights
+    // (the spec map), as in BO1
+    private const int CamoSize = 2048;
+    private const float BaseDarken = 0.8f;
+    private const float TraceSoften = 1.4f, TraceCut = 0.6f;
+    private static readonly Color TraceColor = new Color(0.22f, 0.02f, 0.012f, 1f);
+    private const float SpecBoost = 1.3f, SpecBase = 0.3f, TraceGain = 4f;
 
     // ---------- Audio ----------
 

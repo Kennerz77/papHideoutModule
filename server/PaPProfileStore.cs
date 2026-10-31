@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -315,6 +315,14 @@ public class PaPProfileStoreHook(ISptLogger<PaPProfileStoreHook> logger) : IOnLo
         catch (Exception e)
         {
             logger.Error($"[PaP] Profile write hook failed and is disabled (profiles keep the mod's data): {e.GetBaseException().Message}");
+        }
+        try
+        {
+            new MailIdsPatch().Enable();
+        }
+        catch (Exception e)
+        {
+            logger.Error($"[PaP] Mail hook failed and is disabled (insured infused guns come back plain): {e.GetBaseException().Message}");
         }
         return Task.CompletedTask;
     }

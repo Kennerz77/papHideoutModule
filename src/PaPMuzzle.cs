@@ -47,6 +47,55 @@ namespace PaPHideoutModule
             }
             TintShared(infused, color);
             tint.Tinted = infused;
+            // The barrel smoke keeps trailing after the shot: each smoke remembers whose it is until the next one
+            foreach (MuzzleSmoke smoke in Smokes(muzzle))
+            {
+                if (smoke != null)
+                    SmokeTinted[smoke] = infused;
+            }
+        }
+
+        // ---------- Gas and smoke ----------
+
+        private static readonly Dictionary<MuzzleSmoke, bool> SmokeTinted = new Dictionary<MuzzleSmoke, bool>();
+
+        private static readonly HarmonyLib.AccessTools.FieldRef<MuzzleManager, MuzzleSmoke[]> SmokesOf =
+            HarmonyLib.AccessTools.FieldRefAccess<MuzzleManager, MuzzleSmoke[]>("_muzzleSmokes");
+
+        private static readonly HarmonyLib.AccessTools.FieldRef<MuzzleSmoke, LinkedList<MuzzleSmoke.Point>> PointsOf =
+            HarmonyLib.AccessTools.FieldRefAccess<MuzzleSmoke, LinkedList<MuzzleSmoke.Point>>("_points");
+
+        private static MuzzleSmoke[] Smokes(MuzzleManager muzzle)
+        {
+            if (SmokeTinted.Count > 64)
+            {
+                foreach (MuzzleSmoke dead in SmokeTinted.Keys.Where(s => s == null).ToList())
+                    SmokeTinted.Remove(dead);
+            }
+            return SmokesOf(muzzle) ?? new MuzzleSmoke[0];
+        }
+
+        /// <summary>A puff of gas from the muzzle or suppressor of a gun whose last shot was a 115 one.</summary>
+        public static void TintFume(MuzzleManager muzzle, ref Color32 color)
+        {
+            if (!Managers.TryGetValue(muzzle, out Tint tint) || !tint.Tinted)
+                return;
+            Color tinted = Recolor(color, PaPHideoutModulePlugin.MuzzleFlashColor);
+            color = tinted;
+        }
+
+        /// <summary>The newest point of a barrel's smoke trail (the game makes it white): the 115 colour, same alpha.</summary>
+        public static void TintSmokePoint(MuzzleSmoke smoke)
+        {
+            if (!SmokeTinted.TryGetValue(smoke, out bool tinted) || !tinted)
+                return;
+            LinkedList<MuzzleSmoke.Point> points = PointsOf(smoke);
+            if (points?.First?.Value == null)
+                return;
+            Color32 white = points.First.Value.Color;
+            Color32 red = Recolor(white, PaPHideoutModulePlugin.MuzzleFlashColor);
+            red.a = white.a;
+            points.First.Value.Color = red;
         }
 
         private static Tint Get(MuzzleManager muzzle)

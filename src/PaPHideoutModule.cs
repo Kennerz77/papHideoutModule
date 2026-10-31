@@ -32,7 +32,7 @@ namespace PaPHideoutModule
     {
         public const string PluginGuid = "com.kennerz.paphideoutmodule";
         public const string PluginName = "Kennerz-PaPHideoutModule"; // Forge rule: "Username-ModName"
-        public const string PluginVersion = "2.0.0";
+        public const string PluginVersion = "2.1.0";
 
         private const string InstanceName = "PaP_Machine (PaPHideoutModule)";
         // Looks and sound only (F12): no weapon bonuses, so it costs (and adds to a gun's price) far less
@@ -658,9 +658,15 @@ namespace PaPHideoutModule
             if (weapon == null)
                 yield return ("Draw a weapon to insert it", null);
             else if (PaPRegistry.IsInfused(weapon.Id))
-                yield return ("Already 115 Infused", null);
+            {
+                // Infused in the other machine: 5k sends it through this one for this machine's camo
+                if (CanRepack(weapon))
+                    yield return ($"Re-insert gun ({RepackCost:N0} RUB)", () => TryUpgradeHeldWeapon(true));
+                else
+                    yield return ("Already 115 Infused", null);
+            }
             else
-                yield return ($"Insert gun ({UpgradeCost:N0} RUB)", TryUpgradeHeldWeapon);
+                yield return ($"Insert gun ({UpgradeCost:N0} RUB)", () => TryUpgradeHeldWeapon(false));
         }
 
         private static Weapon HeldWeapon(HideoutPlayerOwner owner) => owner?.HideoutPlayer?.HandsController?.Item as Weapon;
@@ -723,10 +729,16 @@ namespace PaPHideoutModule
 
         // ---------- Upgrade ----------
 
-        private void TryUpgradeHeldWeapon()
+        private const int RepackCost = 5_000;
+
+        /// <summary>Infused in the other machine.</summary>
+        private static bool CanRepack(Weapon weapon) =>
+            PaPOrigins.Has(weapon.Id) != UsingOrigins;
+
+        private void TryUpgradeHeldWeapon(bool repack)
         {
             Weapon weapon = HeldWeapon(Owner);
-            if (weapon == null || PaPRegistry.IsInfused(weapon.Id))
+            if (weapon == null || PaPRegistry.IsInfused(weapon.Id) != repack || (repack && !CanRepack(weapon)))
                 return;
 
             // The hands hold the weapons-mode copy; the server only knows the original in the profile
@@ -744,8 +756,26 @@ namespace PaPHideoutModule
             // Plain until it comes back out of the machine (released in UseRoutine)
             PaPCamo.Hold(original);
             _signatureBefore = PaPCopies.Signature(weaponId);
-            PaPServer.SendUpgrade(weaponId, !Bonuses, result =>
+            Action<IResult> reply = result =>
             {
+                if (repack)
+                {
+                    // Paid when the server did not refuse; the infusion itself is unchanged
+                    if (result != null && !result.Failed)
+                    {
+                        if (_accept != null && _accept.clip != null)
+                            _accept.Play();
+                        StartCoroutine(UseRoutine(PaPCopies.Real(weaponId) ?? original, true));
+                        return;
+                    }
+                    PaPCamo.Release(weaponId);
+                    _busy = false;
+                    if (_deny != null && _deny.clip != null)
+                        _deny.Play();
+                    Warn($"The machine refuses. {(result == null ? "It can't reach the server." : !string.IsNullOrEmpty(result.Error) ? result.Error : $"You need {RepackCost:N0} roubles.")}");
+                    return;
+                }
+
                 // The server's list is the truth: it only contains the weapon if the fee was paid
                 PaPRegistry.Refresh();
                 if (PaPRegistry.IsInfused(weaponId))
@@ -767,7 +797,11 @@ namespace PaPHideoutModule
                     : result.Failed && !string.IsNullOrEmpty(result.Error) ? result.Error
                     : $"You need {UpgradeCost:N0} roubles.";
                 Warn($"The machine refuses. {reason}");
-            });
+            };
+            if (repack)
+                PaPServer.Send(PaPServer.Repack, weaponId, reply);
+            else
+                PaPServer.SendUpgrade(weaponId, !Bonuses, reply);
         }
 
         private static void Warn(string message) =>
@@ -1029,6 +1063,13 @@ namespace PaPHideoutModule
             AudioSource Find(string name) => sources.FirstOrDefault(s => s.gameObject.name == name);
             _jingle = Find("Audio_Jingle");
             _processLoop = Find("Audio_ProcessLoop");
+            if (UsingOrigins && _processLoop != null && _processLoop.clip != null)
+            {
+                bool wasPlaying = _processLoop.isPlaying;
+                _processLoop.clip = SeamlessLoop(_processLoop.clip);
+                if (wasPlaying)
+                    _processLoop.Play();
+            }
             _sting = Find("Audio_Sting");
             _crunch = Find("Audio_Crunch");
             // Loaded by name too, so the sounds play even if the prefab's own clip reference didn't come through
@@ -1108,6 +1149,48 @@ namespace PaPHideoutModule
             }
         }
 
+        private static readonly Dictionary<AudioClip, AudioClip> SeamlessClips = new Dictionary<AudioClip, AudioClip>();
+
+        /// <summary>
+        /// The clip with its end faded into its start, so the loop has no audible restart: the last second is mixed
+        /// over the first second and then dropped, so the sound just continues from the end into the start.
+        /// </summary>
+        private static AudioClip SeamlessLoop(AudioClip clip)
+        {
+            if (SeamlessClips.TryGetValue(clip, out AudioClip done) && done != null)
+                return done;
+            try
+            {
+                int channels = clip.channels;
+                int fade = Mathf.Min(clip.frequency, clip.samples / 3);
+                if (fade < 64 || !clip.LoadAudioData() && clip.loadState != AudioDataLoadState.Loaded)
+                    return clip;
+                float[] data = new float[clip.samples * channels];
+                if (!clip.GetData(data, 0))
+                    return clip;
+                int keep = clip.samples - fade;
+                float[] output = new float[keep * channels];
+                Array.Copy(data, output, output.Length);
+                for (int i = 0; i < fade; i++)
+                {
+                    // Equal-power crossfade: the tail fades out under the head fading in
+                    float t = (float)i / fade;
+                    float head = Mathf.Sin(t * Mathf.PI * 0.5f), tail = Mathf.Cos(t * Mathf.PI * 0.5f);
+                    for (int c = 0; c < channels; c++)
+                        output[i * channels + c] = data[i * channels + c] * head + data[(keep + i) * channels + c] * tail;
+                }
+                AudioClip result = AudioClip.Create(clip.name + " (loop)", keep, channels, clip.frequency, false);
+                result.SetData(output, 0);
+                SeamlessClips[clip] = result;
+                return result;
+            }
+            catch (Exception e)
+            {
+                Log.LogWarning($"Could not smooth the Origins hum loop: {e.Message}");
+                return clip;
+            }
+        }
+
         private static void FixShaders(GameObject root)
         {
             // Only rebind bundled shaders that can't run here (pink); swapping working ones can lose keyword variants.
@@ -1139,7 +1222,7 @@ namespace PaPHideoutModule
         /// debug key. The gun leaves the player's hands, rides into the machine, vanishes, comes back out with the
         /// camo, and creeps back in; take it in time or (if enabled) the machine keeps it.
         /// </summary>
-        private IEnumerator UseRoutine(Weapon weapon)
+        private IEnumerator UseRoutine(Weapon weapon, bool repack = false)
         {
             _busy = true;
             _spinTarget = IdleSpinSpeed;
@@ -1216,7 +1299,10 @@ namespace PaPHideoutModule
             PaPOrigins.Set(weapon.Id, UsingOrigins);
             PaPCamo.Release(weapon.Id);
             RefreshInfusedVisuals();
-            PaPApi.RaiseUpgraded(weapon);
+            if (!repack)
+                PaPApi.RaiseUpgraded(weapon);
+            else
+                PaPApi.RaiseChanged(); // the other machine's camo: mods switching their look listen for this
             if (_displayGun != null)
             {
                 _displayGun.ShowCamo(weapon, true);

@@ -53,6 +53,9 @@ namespace PaPHideoutModule
             // 115-coloured tracers and muzzle flash
             Prefix(harmony, AccessTools.Method(typeof(TracersLight), nameof(TracersLight.CreateTracer)), nameof(TracerPrefix));
             Prefix(harmony, AccessTools.Method(typeof(MuzzleManager), nameof(MuzzleManager.Shot)), nameof(MuzzleShotPrefix));
+            // The gas puffing out of the muzzle or suppressor, and the smoke trailing off the barrel, in the 115 colour too
+            Prefix(harmony, AccessTools.GetDeclaredMethods(typeof(MuzzleManager)).FirstOrDefault(m => m.Name.EndsWith("IFumeEmitter.Emit")), nameof(FumePrefix));
+            Patch(harmony, AccessTools.Method(typeof(MuzzleSmoke), nameof(MuzzleSmoke.CreatePoint)), nameof(SmokePointPostfix));
 
             Patch(harmony, AccessTools.Method(typeof(IconsHash), nameof(IconsHash.GetItemHash)), nameof(IconHashPostfix));
             Patch(harmony, AccessTools.Method(typeof(ItemView), "NewItemView"), nameof(ItemViewPostfix));
@@ -563,6 +566,30 @@ namespace PaPHideoutModule
             }
         }
 
+        private static void FumePrefix(MuzzleManager __instance, ref Color32 color)
+        {
+            try
+            {
+                PaPMuzzle.TintFume(__instance, ref color);
+            }
+            catch (Exception e)
+            {
+                PaPHideoutModulePlugin.Log.LogError($"PaP muzzle gas failed: {e}");
+            }
+        }
+
+        private static void SmokePointPostfix(MuzzleSmoke __instance)
+        {
+            try
+            {
+                PaPMuzzle.TintSmokePoint(__instance);
+            }
+            catch (Exception e)
+            {
+                PaPHideoutModulePlugin.Log.LogError($"PaP barrel smoke failed: {e}");
+            }
+        }
+
         private static bool Infused(Item item) => item is Weapon && PaPRegistry.IsInfused(item.Id);
 
         // Upgraded names other mods gave their weapons (PaPApi.RegisterName): template -> (name, short name)
@@ -710,7 +737,7 @@ namespace PaPHideoutModule
 
         // Bumped to retire cached pictures: "PaP8" the washed-out rocks of older builds; "PaP9"/"PLN4" (1.1.0) guns and
         // parts photographed with camo stuck on (a part's own copy of a painted material, which 1.0.0 couldn't undo)
-        private const int IconSalt = 0x5061503D; // bumped: the camo rules changed, so every picture is redone
+        private const int IconSalt = 0x50615043; // bumped: the camo rules changed, so every picture is redone
         private const int PlainPartSalt = 0x504C4E34; // "PLN4"
 
         // Icons are cached by hash; anything that changes the camo on any part of the item must change the hash, or

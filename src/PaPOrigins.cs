@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
@@ -35,6 +35,22 @@ namespace PaPHideoutModule
         }
 
         public static bool Has(string weaponId) => weaponId != null && Ids.Contains(PaPRegistry.OriginalId(weaponId));
+
+        /// <summary>The gun came back with a new id (insurance mail): it keeps the machine's camo.</summary>
+        public static void Move(string oldId, string newId)
+        {
+            if (!Ids.Remove(oldId))
+                return;
+            Ids.Add(newId);
+            try
+            {
+                File.WriteAllLines(FilePath, Ids);
+            }
+            catch (System.Exception e)
+            {
+                PaPHideoutModulePlugin.Log.LogWarning($"Could not save origins_guns.txt: {e.Message}");
+            }
+        }
 
         /// <summary>The gun was just upgraded in the Origins machine (<paramref name="origins"/>) or in the default one.</summary>
         public static void Set(string weaponId, bool origins)

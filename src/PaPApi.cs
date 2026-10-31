@@ -47,14 +47,11 @@ namespace PaPHideoutModule
         public static void KeepMaterialsPlain(string metalLikeWord, params string[] words) => PaPCamo.KeepPlain(metalLikeWord, words);
 
         /// <summary>
-        /// On a gun upgraded in the Origins machine: materials whose name contains <paramref name="materialWord"/> get the
-        /// blue crystal (<paramref name="crystal"/>) or the metal plating. Without a rule, metal parts are crystal and
-        /// furniture and attachments plating.
+        /// True for a gun that was upgraded in the Origins machine (its camo is the Origins one). A re-pack in the other
+        /// machine flips it and raises <see cref="InfusedChanged"/>.
         /// </summary>
-        /// <summary>True for a gun that was upgraded in the Origins machine (its camo is the Origins one).</summary>
         public static bool IsOriginsGun(Item item) => item != null && PaPCamo.OnInfusedGun(item) && PaPCamo.OnOriginsGun(item);
 
-        /// <summary>On an Origins gun, materials with this word in their name keep their plain look (a dial's face).</summary>
         /// <summary>An alpha-tested material (normally never painted) that does take the Origins camo.</summary>
         public static void PaintCutoutOnOrigins(string materialWord) => PaPCamo.PaintCutoutOnOrigins(materialWord);
 
@@ -64,11 +61,17 @@ namespace PaPHideoutModule
         /// </summary>
         public static void SplitOnRed(string materialWord) => PaPCamo.SplitOnRed(materialWord);
 
+        /// <summary>On an Origins gun, materials with this word in their name keep their plain look.</summary>
         public static void KeepOriginsPlain(string materialWord) => PaPCamo.KeepOriginsPlain(materialWord);
 
         /// <summary>This weapon plays its own shot sound only: no Pack-a-Punch shot tail on top.</summary>
         public static void NoShotTail(string templateId) => PaPShotAudio.NoTail(templateId);
 
+        /// <summary>
+        /// On a gun upgraded in the Origins machine: materials whose name contains <paramref name="materialWord"/> get the
+        /// blue crystal (<paramref name="crystal"/>) or the metal plating. Without a rule, metal parts are crystal and
+        /// furniture and attachments plating.
+        /// </summary>
         public static void SetOriginsLook(string materialWord, bool crystal) => PaPCamo.SetOriginsLook(materialWord, crystal);
 
         /// <summary>Like <see cref="SetOriginsLook"/>, but by the name of the part's renderer (for parts that share a material with the rest).</summary>

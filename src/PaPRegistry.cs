@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -146,6 +146,13 @@ namespace PaPHideoutModule
                     _infused = infused;
                     Version++;
                 }
+                // Infused guns that came back by mail with new ids (insurance): their machine camo follows
+                foreach (string pair in state.moved ?? new List<string>())
+                {
+                    int split = pair.IndexOf('>');
+                    if (split > 0)
+                        PaPOrigins.Move(pair.Substring(0, split), pair.Substring(split + 1));
+                }
                 FragmentScales = state.fragmentScales ?? new Dictionary<string, float>();
                 Loaded = true;
                 return true;
@@ -165,6 +172,7 @@ namespace PaPHideoutModule
         {
             public List<string> infused;
             public Dictionary<string, float> fragmentScales;
+            public List<string> moved;
         }
 #pragma warning restore CS0649
     }

@@ -24,6 +24,15 @@ namespace PaPHideoutModule
         private static readonly int EmissionMap = Shader.PropertyToID("_EmissionMap");
         private static readonly int EmissionColor = Shader.PropertyToID("_EmissionColor");
         private const float CamoEmission = 0.06f;
+        // The default camo's texture is already jet black with red traces (the BO1 maps, baked by the bundle build): no
+        // tint, and the glow is the texture itself, so only the traces light up
+        private static readonly Color DefaultTint = Color.white;
+        private static readonly Color DefaultGlow = new Color(0.25f, 0.25f, 0.25f, 1f);
+        private static readonly int HasTint = Shader.PropertyToID("_HasTint");
+        private static readonly int SpecMap = Shader.PropertyToID("_SpecMap");
+        // The default camo's circuitry at twice the size: fewer, bigger circuits across a gun
+        private const float DefaultTiling = 0.5f;
+        private static readonly int BaseTintColor = Shader.PropertyToID("_BaseTintColor");
 
         // Lenses, reticles, glass, lasers and effects keep their own look
         private static readonly string[] SkipShaderWords = { "lens", "reticle", "collimator", "glass", "optic", "laser", "particle", "flash", "sprite", "transparent", "additive" };
@@ -210,9 +219,8 @@ namespace PaPHideoutModule
         {
             if (CrystalSlots.Count == 0)
                 return;
-            float tiling = PaPHideoutModulePlugin.CamoTiling;
-            float shade = 0.92f + 0.08f * Mathf.Sin(t * 1.3f + 0.6f * Mathf.Sin(t * 0.7f));
-            float pulse = 0.45f + 0.2f * Mathf.Sin(t * 1.7f) + 0.1f * Mathf.Sin(t * 4.3f);
+            float shade = 0.92f + 0.08f * Mathf.Sin(t * 0.4f + 0.6f * Mathf.Sin(t * 0.21f));
+            float pulse = 0.45f + 0.2f * Mathf.Sin(t * 0.5f) + 0.1f * Mathf.Sin(t * 1.3f);
             foreach (Renderer dead in CrystalSlots.Keys.Where(r => r == null).ToList())
                 CrystalSlots.Remove(dead);
             foreach (var pair in CrystalSlots)
@@ -232,7 +240,10 @@ namespace PaPHideoutModule
                     // Set on the material the renderer really draws (the game's own copy of ours, if it made one):
                     // property blocks never showed on guns in the hands
                     Material m = mats[slot];
-                    var flow = new Vector2(t * 0.06f, t * 0.04f);
+                    if (m.name.Contains(IconTag))
+                        continue; // a picture's copy keeps the dimmed colour it was given
+                    // Barely drifting, swaying back and forth: suspended in jelly rather than flowing
+                    var flow = new Vector2(t * 0.008f + 0.025f * Mathf.Sin(t * 0.31f), t * 0.005f + 0.02f * Mathf.Sin(t * 0.23f + 1.7f));
                     if (m.IsKeywordEnabled("_DETAIL_MULX2"))
                     {
                         m.SetTextureOffset(DetailST_Name, flow);
@@ -255,17 +266,17 @@ namespace PaPHideoutModule
             {
                 if (m == null)
                     continue;
-                var offset = new Vector2(t * 0.045f, t * 0.03f);
+                var offset = new Vector2(t * 0.008f + 0.025f * Mathf.Sin(t * 0.31f), t * 0.005f + 0.02f * Mathf.Sin(t * 0.23f + 1.7f));
                 int texture = BaseColorTexture(m);
                 if (texture != 0)
                     m.SetTextureOffset(texture, offset);
                 if (m.HasProperty(EmissionMap))
-                    m.SetTextureOffset(EmissionMap, new Vector2(-t * 0.06f, t * 0.04f));
-                float pulse = 0.45f + 0.2f * Mathf.Sin(t * 1.7f) + 0.1f * Mathf.Sin(t * 4.3f);
+                    m.SetTextureOffset(EmissionMap, new Vector2(-t * 0.008f + 0.02f * Mathf.Sin(t * 0.27f), t * 0.005f));
+                float pulse = 0.45f + 0.2f * Mathf.Sin(t * 0.5f) + 0.1f * Mathf.Sin(t * 1.3f);
                 if (m.HasProperty(EmissionColor))
                     m.SetColor(EmissionColor, new Color(pulse, pulse, pulse, 1f));
                 // The colour map itself breathes too (not every gun shader takes an emission map)
-                float shade = 0.92f + 0.08f * Mathf.Sin(t * 1.3f + 0.6f * Mathf.Sin(t * 0.7f));
+                float shade = 0.92f + 0.08f * Mathf.Sin(t * 0.4f + 0.6f * Mathf.Sin(t * 0.21f));
                 foreach (int color in BaseColors.Where(m.HasProperty))
                     m.SetColor(color, new Color(shade, shade, shade, 1f));
             }
@@ -406,6 +417,8 @@ namespace PaPHideoutModule
             }
         }
 
+        private static bool LookReady(int kind, Texture2D camo) => !PaPAssets.Preloading && LookTexture(kind, camo) != null;
+
         private static Texture2D LookTexture(int kind, Texture2D camo) => kind == 0 ? camo : IsCrystal(kind) ? PaPAssets.OriginsCrystal : PaPAssets.OriginsMetal;
 
         private static void SetPainted(Renderer renderer, bool paint, Texture2D camo, Item owner)
@@ -421,6 +434,8 @@ namespace PaPHideoutModule
                     continue;
                 bool isPainted = Originals.TryGetValue(material, out Material original) || PaintedCopy(renderer, i, material, out original);
                 int kind = paint && !isPainted ? PaintKind(material, owner, renderer) : -1;
+                if (kind >= 0 && !LookReady(kind, camo))
+                    continue; // still loading: left plain, painted on the refresh once the bundle is in
                 if (kind >= 0)
                 {
                     materials[i] = PaintedFor(material, LookTexture(kind, camo), kind);
@@ -439,6 +454,8 @@ namespace PaPHideoutModule
                     // A pooled model (the inspect window, the hands) can still wear the look it had for another gun or for
                     // a photo: it's re-picked every time, not only when first painted
                     int want = PaintKind(original, owner, renderer);
+                    if (want >= 0 && !LookReady(want, camo))
+                        continue;
                     Material target = want < 0 ? original : PaintedFor(original, LookTexture(want, camo), want);
                     if (Bare(material.name) != target.name)
                     {
@@ -508,29 +525,52 @@ namespace PaPHideoutModule
             Shader glowing = IsCrystal(kind) ? Shader.Find("Standard (Specular setup)") : null;
             painted = glowing != null ? new Material(glowing) { name = PaintedName(original, kind) } : new Material(original) { name = PaintedName(original, kind) };
             int texture = glowing != null ? Shader.PropertyToID("_MainTex") : BaseColorTexture(painted);
-            float tiling = PaPHideoutModulePlugin.CamoTiling;
+            float tiling = kind == 0 ? DefaultTiling : PaPHideoutModulePlugin.CamoTiling;
             painted.SetTexture(texture, camo);
             painted.SetTextureScale(texture, new Vector2(tiling, tiling));
             painted.SetTextureOffset(texture, Vector2.zero);
             foreach (int color in BaseColors.Where(painted.HasProperty))
-                painted.SetColor(color, Color.white);
+                painted.SetColor(color, kind == 0 ? DefaultTint : Color.white);
+            // Tarkov colours FDE (and other coloured) parts with a tint over the texture: off, or the camo comes out tan
+            if (kind == 0 && painted.HasProperty(HasTint))
+                painted.SetFloat(HasTint, 0f);
+            if (kind == 0 && painted.HasProperty(BaseTintColor))
+                painted.SetColor(BaseTintColor, Color.white);
+            // BO1's spec map: the circuitry shows in the highlights and reflections, and the surface is glossy
+            Texture2D spec = kind == 0 ? PaPAssets.CamoSpec : null;
+            if (spec != null && painted.HasProperty(SpecMap))
+            {
+                painted.SetTexture(SpecMap, spec);
+                painted.SetTextureScale(SpecMap, new Vector2(tiling, tiling));
+                painted.SetTextureOffset(SpecMap, Vector2.zero);
+            }
+            if (kind == 0)
+            {
+                if (painted.HasProperty("_Specularness"))
+                    painted.SetFloat("_Specularness", 1.1f);
+                if (painted.HasProperty("_Glossness"))
+                    painted.SetFloat("_Glossness", 1.6f);
+                // A dark, bluish reflection: glossy black, not chrome (a bright one turned the whole gun light grey)
+                if (painted.HasProperty("_ReflectColor"))
+                    painted.SetColor("_ReflectColor", new Color(0.12f, 0.13f, 0.17f, 0.5f));
+            }
             // Shiny black: glossy, but not mirror-metal (a high metallic reflects the room and reads silver)
             foreach (string gloss in new[] { "_Glossiness", "_Smoothness" })
             {
                 if (painted.HasProperty(gloss))
-                    painted.SetFloat(gloss, kind == 0 ? 0.45f : IsCrystal(kind) ? 0.75f : 0.55f);
+                    painted.SetFloat(gloss, kind == 0 ? 0.8f : IsCrystal(kind) ? 0.75f : 0.55f);
             }
             if (painted.HasProperty("_Metallic"))
                 painted.SetFloat("_Metallic", kind == 2 ? 0.4f : 0.1f);
             if (painted.HasProperty("_SpecColor"))
-                painted.SetColor("_SpecColor", kind == 0 ? new Color(0.12f, 0.1f, 0.1f, 1f) : new Color(0.25f, 0.25f, 0.28f, 1f));
+                painted.SetColor("_SpecColor", kind == 0 ? new Color(0.55f, 0.55f, 0.6f, 1f) : new Color(0.25f, 0.25f, 0.28f, 1f));
             // A faint self-glow of the pattern, so the traces still read in dark rooms. Only where the shader takes an
             // emission map: a colour alone would wash the whole gun in one flat tint
             if (kind != 1 && painted.HasProperty(EmissionMap) && painted.HasProperty(EmissionColor))
             {
                 painted.SetTexture(EmissionMap, camo);
                 painted.SetTextureScale(EmissionMap, new Vector2(tiling, tiling));
-                painted.SetColor(EmissionColor, new Color(CamoEmission, CamoEmission, CamoEmission, 1f));
+                painted.SetColor(EmissionColor, kind == 0 ? DefaultGlow : new Color(CamoEmission, CamoEmission, CamoEmission, 1f));
                 painted.EnableKeyword("_EMISSION");
             }
             if (IsCrystal(kind) && painted.HasProperty(EmissionMap) && painted.HasProperty(EmissionColor) && PaPAssets.OriginsCrystalGlow != null)
@@ -589,9 +629,15 @@ namespace PaPHideoutModule
             {
                 // The studio overexposes: dimmer colour, no self-glow, so the picture matches the model in the hands
                 foreach (int color in BaseColors.Where(painted.HasProperty))
-                    painted.SetColor(color, new Color(0.42f, 0.42f, 0.42f, 1f));
+                    painted.SetColor(color, kind == 0 ? new Color(0.75f, 0.75f, 0.75f, 1f) : new Color(0.14f, 0.14f, 0.14f, 1f));
+                if (kind == 0 && painted.HasProperty("_ReflectColor"))
+                    painted.SetColor("_ReflectColor", new Color(0.15f, 0.16f, 0.2f, 0.5f));
+                if (painted.HasProperty("_SpecColor"))
+                    painted.SetColor("_SpecColor", painted.GetColor("_SpecColor") * 0.3f);
+                if (kind != 0 && painted.HasProperty("_Glossiness"))
+                    painted.SetFloat("_Glossiness", Mathf.Min(painted.GetFloat("_Glossiness"), 0.3f));
                 if (kind == 1 && painted.HasProperty(EmissionColor))
-                    painted.SetColor(EmissionColor, new Color(0.15f, 0.35f, 0.45f, 1f));
+                    painted.SetColor(EmissionColor, new Color(0.06f, 0.14f, 0.18f, 1f));
                 else if (painted.HasProperty(EmissionColor))
                     painted.SetColor(EmissionColor, Color.black);
             }
@@ -624,6 +670,8 @@ namespace PaPHideoutModule
         // The camo is black metal: sights, lights and lasers keep their own look, and so do wooden and plastic parts
         private static readonly string[] SkipOwnerWords = { "sight", "scope", "light", "laser", "optic" };
         private static readonly string[] NonMetalWords = { "plastic", "polymer", "rubber", "nylon", "foam", "furniture", "fabric", "leather", "pad", "grip" };
+
+        private static readonly string[] SoftWords = { "rubber", "foam", "fabric", "leather", "pad", "cloth", "strap" };
 
         private static readonly HashSet<string> StructuralSlots = new HashSet<string>
         {
@@ -856,9 +904,9 @@ namespace PaPHideoutModule
             if (renderer != null && OriginsPartRoles.Count > 0 && mat.shader != null && BaseColorTexture(mat) != 0 && mat.renderQueue <= 2450 && OnOriginsGun(owner))
             {
                 string part = renderer.name.ToLowerInvariant();
-                // A dial's face keeps its own colours
+                // A dial's face is metal plating too (as on BO2's Origins guns)
                 if (mat.name.ToLowerInvariant().Contains("meter"))
-                    return Skip(mat, "dial face");
+                    return Note(mat, 2);
                 foreach (var (word, crystal) in OriginsPartRoles)
                 {
                     if (part.Contains(word))
@@ -881,7 +929,7 @@ namespace PaPHideoutModule
                 name += " " + main.name.ToLowerInvariant();
             bool nonMetal = !AlwaysPaintWords.Any(name.Contains) && NonMetalWords.Any(name.Contains);
             bool origins = OnOriginsGun(owner);
-            if (!origins && PlainWords.Any(name.Contains))
+            if (!origins && PlainWords.Any(name.Contains) && OnModGun(owner))
                 return Skip(mat, "kept plain by its mod");
 
             if (!origins)
@@ -895,7 +943,10 @@ namespace PaPHideoutModule
                     return Skip(mat, "magazine");
                 if (optic)
                     return Skip(mat, "mounted " + ownerKind);
-                if (nonMetal)
+                // Handguards, stocks and grips are painted whatever they're made of (FDE polymer too); only soft
+                // materials (rubber, foam, fabric, leather, pads) keep their look
+                bool structural = !mounted || StructuralSlots.Contains(SlotOf(owner));
+                if (nonMetal && !(structural && !SoftWords.Any(name.Contains)))
                     return Skip(mat, "not metal");
                 return Note(mat, 0);
             }
@@ -918,6 +969,24 @@ namespace PaPHideoutModule
             if (mounted && (slotId == "mod_barrel" || slotId.StartsWith("mod_reciever") || slotId.StartsWith("mod_receiver")))
                 return Note(mat, 1);
             return Note(mat, mounted || nonMetal || owner is Magazine || name.Contains("wood") ? 2 : 1);
+        }
+
+        /// <summary>
+        /// The part sits on a gun another mod registered through PaPApi (an upgraded name or bonuses). A mod's plain words
+        /// are for its own gun: the Thundergun's "stock" must not keep every other gun's stock plain.
+        /// </summary>
+        private static bool OnModGun(Item item)
+        {
+            var seen = new HashSet<Item>();
+            for (; item != null && seen.Add(item) && seen.Count < 32; item = item.CurrentAddress?.Container?.ParentItem)
+            {
+                if (item is Weapon)
+                {
+                    string template = item.TemplateId.ToString();
+                    return PaPPatches.UpgradedNames.ContainsKey(template) || PaPBonuses.Has(template);
+                }
+            }
+            return false;
         }
 
         internal static bool OnOriginsGun(Item item)

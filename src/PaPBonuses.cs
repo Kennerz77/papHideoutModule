@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using EFT.InventoryLogic;
 
 namespace PaPHideoutModule
@@ -33,6 +33,8 @@ namespace PaPHideoutModule
     {
         private static readonly PaPBonusSet Standard = PaPBonusSet.Standard;
         private static readonly Dictionary<string, PaPBonusSet> ByTemplate = new Dictionary<string, PaPBonusSet>();
+
+        public static bool Has(string templateId) => templateId != null && ByTemplate.ContainsKey(templateId);
 
         public static void Register(string templateId, PaPBonusSet bonuses)
         {

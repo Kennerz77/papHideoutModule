@@ -87,10 +87,14 @@ namespace PaPHideoutModule
         /// <summary>The Origins stone machine (F12 > Machine model), or null if the bundle doesn't have it.</summary>
         public static GameObject OriginsPrefab => _originsPrefab != null ? _originsPrefab : _originsPrefab = Load<GameObject>(OriginsPrefabName);
 
+        /// <summary>BO1's spec map (red-copper traces, gloss in alpha): the default camo's highlights, or null.</summary>
+        public static Texture2D CamoSpec => Preloading ? null : _camoSpec != null ? _camoSpec : _camoSpec = Load<Texture2D>("pap_camo_spec");
+        private static Texture2D _camoSpec;
+
         public static Texture2D CamoAlbedo => _camo != null ? _camo : Preloading ? null : _camo = Load<Texture2D>(CamoName);
 
         /// <summary>True once the camo can be painted; until then icons mustn't be cached as "camo" pictures.</summary>
-        public static bool CamoReady => CamoAlbedo != null;
+        public static bool CamoReady => !Preloading && CamoAlbedo != null;
 
         private static readonly GameObject[] Rocks = new GameObject[5];
 

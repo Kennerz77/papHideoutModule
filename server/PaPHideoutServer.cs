@@ -25,7 +25,7 @@ public record ModMetadata : IModMetadata
     public string Name { get; init; } = "PaPHideoutModule"; // letters and numbers only (Forge rule)
     public string Author { get; init; } = "Kennerz";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("2.0.0");
+    public SemanticVersioning.Version Version { get; init; } = new("2.1.0");
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.0");
     public List<string>? Incompatibilities { get; init; }
     /// <summary>Hideout Uncensored provides weapons in the hideout, which the machine needs (the client depends on it too).</summary>
@@ -58,7 +58,8 @@ public record PaPItemRequest : BaseInteractionRequestData
 /// </summary>
 public record PaPState(
     [property: JsonPropertyName("infused")] List<string> Infused,
-    [property: JsonPropertyName("fragmentScales")] Dictionary<string, float> FragmentScales);
+    [property: JsonPropertyName("fragmentScales")] Dictionary<string, float> FragmentScales,
+    [property: JsonPropertyName("moved")] List<string> Moved);
 
 /// <summary>
 /// PaPUpgrade: charge the player and infuse the weapon. PaPStrip: remove its powers. PaPDestroy: the gun was left in
@@ -69,6 +70,7 @@ public record PaPState(
 [Injectable(TypePriority = OnLoadOrder.Routers)]
 public class PaPItemEventRouter(PaPService service, PaPQuestService questService) : ItemEventRouter([
     Route(PaPService.UpgradeAction, service.Upgrade),
+    Route(PaPService.RepackAction, service.Repack),
     Route(PaPService.StripAction, service.Strip),
     Route(PaPService.DestroyAction, service.Destroy),
     Route(PaPService.BotLootAction, service.BotLoot),
@@ -94,7 +96,7 @@ public class PaPStaticRouter(JsonUtil jsonUtil, PaPService service, PaPQuestServ
             // quest if they've opened the side room in a way the live hooks didn't see (it shows next login)
             PaPService.EnsureArea(saveServer, sessionId);
             PaPService.EnsureQuest(saveServer, questService, sessionId);
-            return ValueTask.FromResult(httpResponseUtil.NoBody(new PaPState(service.GetInfused(sessionId), PaPQuestService.FragmentScales())));
+            return ValueTask.FromResult(httpResponseUtil.NoBody(new PaPState(service.GetInfused(sessionId), PaPQuestService.FragmentScales(), service.GetMoved(sessionId))));
         }
     ),
     new RouteAction<EmptyRequestData>(
@@ -140,6 +142,7 @@ internal class IdStore(string fileName, Action<string> logError)
 public class PaPService
 {
     public const string UpgradeAction = "PaPUpgrade";
+    public const string RepackAction = "PaPRepack";
     public const string StripAction = "PaPStrip";
     public const string DestroyAction = "PaPDestroy";
     public const string BotLootAction = "PaPBotLoot";
@@ -155,7 +158,9 @@ public class PaPService
     private readonly HttpResponseUtil _httpResponseUtil;
 
     private readonly object _lock = new();
-    private readonly IdStore _infused, _greeted;
+    private readonly IdStore _infused, _greeted, _moved;
+
+    internal static PaPService? Instance { get; private set; }
 
     public PaPService(ISptLogger<PaPService> logger, PaymentService paymentService, InventoryHelper inventoryHelper,
         MailSendService mailSendService, HttpResponseUtil httpResponseUtil)
@@ -167,6 +172,8 @@ public class PaPService
         _httpResponseUtil = httpResponseUtil;
         _infused = new IdStore("infused.json", message => logger.Error(message));
         _greeted = new IdStore("greeted.json", message => logger.Error(message));
+        _moved = new IdStore("moved.json", message => logger.Error(message));
+        Instance = this;
     }
 
     public ItemEventRouterResponse Upgrade(PmcData pmcData, PaPItemRequest body, MongoId sessionId, ItemEventRouterResponse output)
@@ -199,6 +206,29 @@ public class PaPService
         PaPServerApi.Run(context, h => h.Upgraded, "upgrade", message => _logger.Error(message));
         if (context.Report(output))
             _logger.Info($"[PaP] Weapon {weaponId}: other mods changed it on upgrade; the client gets the new item tree");
+        return output;
+    }
+
+    /// <summary>
+    /// Sends an already infused weapon through a machine again (to wear the other machine's camo): looks only, so the
+    /// small fee. Nothing changes on the server's side but the money; the camo is the client's business.
+    /// </summary>
+    public ItemEventRouterResponse Repack(PmcData pmcData, PaPItemRequest body, MongoId sessionId, ItemEventRouterResponse output)
+    {
+        string? weaponId = body.Item;
+        if (string.IsNullOrEmpty(weaponId) || !Owns(pmcData, weaponId))
+            return _httpResponseUtil.AppendErrorToOutput(output, "The machine can't find that weapon.");
+
+        lock (_lock)
+        {
+            if (!_infused.For(sessionId).Contains(weaponId))
+                return _httpResponseUtil.AppendErrorToOutput(output, "That weapon isn't 115 Infused.");
+            _paymentService.AddPaymentToOutput(pmcData, Money.ROUBLES, CosmeticCost, sessionId, output);
+            if (output.Warnings?.Count > 0)
+                return output;
+        }
+
+        _logger.Success($"[PaP] {pmcData.Info?.Nickname} re-packed weapon {weaponId} for {CosmeticCost} RUB");
         return output;
     }
 
@@ -298,6 +328,30 @@ public class PaPService
     {
         lock (_lock)
             return _infused.For(sessionId).ToList();
+    }
+
+    /// <summary>
+    /// A mail message gave an infused gun a new id (insurance returns): the infusion follows it. The "old>new" pairs
+    /// are kept so the client can carry its own per-gun data (the machine's camo) over too.
+    /// </summary>
+    internal void Moved(MongoId sessionId, string oldId, string newId)
+    {
+        lock (_lock)
+        {
+            if (!_infused.For(sessionId).Remove(oldId))
+                return;
+            _infused.For(sessionId).Add(newId);
+            _infused.Save();
+            _moved.For(sessionId).Add($"{oldId}>{newId}");
+            _moved.Save();
+        }
+        _logger.Info($"[PaP] Infused weapon {oldId} came back by mail as {newId}; it stays 115 Infused");
+    }
+
+    public List<string> GetMoved(MongoId sessionId)
+    {
+        lock (_lock)
+            return _moved.For(sessionId).ToList();
     }
 
     /// <summary>Gives new profiles the hideout area too.</summary>

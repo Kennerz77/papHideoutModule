@@ -13,6 +13,7 @@ namespace PaPHideoutModule
     internal static class PaPServer
     {
         public const string Upgrade = "PaPUpgrade";
+        public const string Repack = "PaPRepack";
         public const string Strip = "PaPStrip";
         public const string Destroy = "PaPDestroy";
         public const string Built = "PaPBuilt";

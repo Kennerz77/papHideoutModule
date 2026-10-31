@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -60,6 +60,7 @@ public static class PaPBundleTools
                     PaPImporter.PrefabPath,
                     PaPImporter.OriginsPrefabPath,
                     PaPImporter.CamoAlbedoPath,
+                    PaPImporter.CamoSpecPath,
                     // The 115 rock fragments ("115 Riddles"): loaded by name, pap_rock_1..5
                     PaPRockBuilder.PrefabPath(0),
                     PaPRockBuilder.PrefabPath(1),
