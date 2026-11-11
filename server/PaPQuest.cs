@@ -405,9 +405,12 @@ public class PaPQuestService
     // Fragments already handed to Mechanic: gone from the inventory, but they mustn't spawn again
     private readonly IdStore _handedIn;
 
+    private readonly IServiceProvider _services;
+
     public PaPQuestService(ISptLogger<PaPQuestService> logger, ProfileHelper profileHelper, TemplateTable templateTable, TimeUtil timeUtil,
-        InventoryHelper inventoryHelper, MailSendService mailSendService, SaveServer saveServer)
+        InventoryHelper inventoryHelper, MailSendService mailSendService, SaveServer saveServer, IServiceProvider services)
     {
+        _services = services;
         _mailSendService = mailSendService;
         _saveServer = saveServer;
         _inventoryHelper = inventoryHelper;
@@ -441,7 +444,8 @@ public class PaPQuestService
     /// </summary>
     public QuestStatus? TryUnlock(PmcData? pmc)
     {
-        if (pmc?.Quests == null || StatusOf(pmc) != null || !RoomOpen(pmc))
+        // A player who chose Pack-a-Punch only for the zombies mode never gets the quest
+        if (pmc?.Quests == null || StatusOf(pmc) != null || !RoomOpen(pmc) || !PaPNormalGame.Now(pmc.Id.ToString()))
             return null;
 
         double now = _timeUtil.GetTimeStamp();
@@ -641,11 +645,61 @@ public class PaPQuestService
     /// Only while the quest is running, and only fragments they don't have (inventory or quest stash) and haven't
     /// handed in, so a fragment lost on death comes back next raid.
     /// </summary>
+    // Fika's headless list (its HeadlessService, found by name, read only, never changed; no Fika reference)
+    private object? _fikaHeadless;
+    private System.Reflection.PropertyInfo? _fikaHeadlessClients;
+    private bool _headlessLooked;
+
+    /// <summary>
+    /// The profile whose rocks go into this raid's loot. A raid hosted on a Fika headless is started by the headless's
+    /// own profile (which never has the quest), so the player who asked the headless for the raid is used instead.
+    /// Anyone else (solo, a player host, no Fika) is themselves.
+    /// </summary>
+    internal MongoId LootOwner(MongoId sessionId)
+    {
+        try
+        {
+            if (!_headlessLooked)
+            {
+                _headlessLooked = true;
+                Type? type = AppDomain.CurrentDomain.GetAssemblies()
+                    .Select(a => a.GetType("FikaServer.Services.Headless.HeadlessService", false)).FirstOrDefault(t => t != null);
+                if (type != null)
+                {
+                    _fikaHeadless = _services.GetService(type);
+                    _fikaHeadlessClients = type.GetProperty("HeadlessClients");
+                }
+            }
+            if (_fikaHeadless == null || _fikaHeadlessClients?.GetValue(_fikaHeadless) is not System.Collections.IDictionary clients)
+                return sessionId;
+            foreach (System.Collections.DictionaryEntry e in clients)
+            {
+                if (e.Key?.ToString() != sessionId.ToString())
+                    continue;
+                object? info = e.Value;
+                string? requester = info?.GetType().GetProperty("RequesterSessionID")?.GetValue(info) as string;
+                if (string.IsNullOrEmpty(requester))
+                {
+                    _logger.Warning("[PaP] A Fika headless started a raid but nobody is named as its host: no 115 fragments placed");
+                    return sessionId;
+                }
+                _logger.Info($"[PaP] Raid on a Fika headless: placing the 115 fragments of its host ({requester})");
+                return new MongoId(requester);
+            }
+        }
+        catch (Exception e)
+        {
+            _logger.Warning($"[PaP] Reading Fika's headless list failed: {e.Message}");
+        }
+        return sessionId;
+    }
+
     public void AddRaidFragments(MongoId sessionId, string mapName, LocationBase location)
     {
         PaPQuestConfig config = Config;
         if (!config.Maps.Contains(mapName, StringComparer.OrdinalIgnoreCase))
             return;
+        sessionId = LootOwner(sessionId); // a no-op when already resolved by the raid start patch
         PmcData? pmc = _profileHelper.GetPmcProfile(sessionId);
         if (StatusOf(pmc)?.Status != QuestStatusEnum.Started)
             return;
@@ -655,12 +709,14 @@ public class PaPQuestService
         lock (_lock)
             handedIn = [.. _handedIn.For(sessionId)];
 
+        // Already in this loot (a Fika co-op raid hands every player the same loot): not twice
+        HashSet<MongoId> present = (location.Loot ?? []).SelectMany(l => l.Items ?? []).Select(i => i.Template).ToHashSet();
         var added = new List<SpawnpointTemplate>();
         for (int i = 0; i < PaPQuestInfo.FragmentCount; i++)
         {
             MongoId tpl = PaPQuestInfo.QuestFragments[i];
             PaPSpawn? spawn = i < config.Spawns.Count ? config.Spawns[i] : null;
-            if (spawn == null || owned.Contains(tpl) || handedIn.Contains(tpl.ToString()))
+            if (spawn == null || owned.Contains(tpl) || present.Contains(tpl) || handedIn.Contains(tpl.ToString()))
                 continue;
             added.Add(SpawnPoint(i, tpl, spawn));
         }

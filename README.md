@@ -1,8 +1,10 @@
 # PaP Hideout Module
 
-The Call of Duty Zombies **Pack-a-Punch** machine, in your SPT hideout. Do Mechanic's quest, build the machine, feed it a gun and roubles, and take it back **115 Infused**. It hits harder, fires faster and kicks less, with the Pack-a-Punch camo, fire sound, tracers and red muzzle smoke.
+The classic zombies **Pack-a-Punch** machine, in your SPT hideout. Do Mechanic's quest, build the machine, feed it a gun and roubles, and take it back **115 Infused**. It hits harder, fires faster and kicks less, with the Pack-a-Punch camo, fire sound, tracers and red muzzle smoke.
 
-Version 2.1.1, for **SPT 4.1.6**. Made by **Kennerz**.
+Version 2.2.0, for **SPT 4.1.6**. Made by **Kenner**.
+
+**Dr K's SPZombies:** this mod is part of Kenner's zombies mode for SPT (round-based classic-style zombies, solo or co-op with Fika). On its own it works exactly as before.
 
 **Making a gun mod?** See **[API.md](API.md)** to make your weapon work with the machine.
 
@@ -13,12 +15,12 @@ Version 2.1.1, for **SPT 4.1.6**. Made by **Kennerz**.
 | SPT | 4.1.x (made on 4.1.6) | |
 | [Hideout Uncensored](https://sp-mod.com/mod/3167/hideout-uncensored) by **trappuss** ([GitHub](https://github.com/trappuss/SPT-Mods-Release)) | 1.3.0 or newer, client **and** server | Lets you draw weapons in the hideout, which the machine needs |
 
-Optional, by Kennerz, with their own upgraded forms: [Ray Gun](https://github.com/Kennerz77/RayGunSPT) and [Thundergun](https://github.com/Kennerz77/ThunderGunSPT).
+Optional, by Kenner, with their own upgraded forms: [Ray Gun](https://github.com/Kennerz77/RayGunSPT) and [Thundergun](https://github.com/Kennerz77/ThunderGunSPT).
 
 ## Installing
 
 1. Close the game and the SPT server.
-2. Extract the zip into your SPT folder (the one with `EscapeFromTarkov.exe`). You should end up with:
+2. Extract the zip into your SPT folder (the one with the `SPT_Runtime` folder). You should end up with:
    - `BepInEx\plugins\PaPHideoutModule\`
    - `SPT_Runtime\user\mods\PaPHideoutServer\`
 3. Start the server, then the game.
@@ -30,6 +32,7 @@ Optional, by Kennerz, with their own upgraded forms: [Ray Gun](https://github.co
 ## How it plays
 
 1. **"115 Riddles" (Mechanic).** Your hideout's side room must be open first (the "Emergency Wall" upgrades). Mechanic then asks you to find **five glowing 115 rock fragments on Factory**. Hand them in and he mails them back.
+   - **Fika co-op:** the rocks show in a raid hosted by the player on the quest, or on a Fika headless that player started (or when they play Factory solo).
    - The rocks can't be sold or thrown away, and they exist nowhere else in the game.
    - If you lose one, he sends a spare.
 2. **Build the Pack-a-Punch.** It's under a tarp in the side room. It needs the five rocks and 115,000 roubles. Once it's built, walk up and pick **Turn on**. It needs the hideout's power.
@@ -47,14 +50,14 @@ To undo an upgrade, right-click the infused gun and pick **Strip 115 powers**.
 | Tracers | every bullet, red-purple |
 | Smoke | red muzzle flash, red barrel smoke and red suppressor gas |
 | Look | Pack-a-Punch camo on the gun and its frame (not sights, mags or other attachments), glowing inventory cell |
-| Sound | the BO3 Pack-a-Punch fire sound |
+| Sound | the original Pack-a-Punch fire sound |
 | Price | normal price plus 500,000 roubles |
 
 ### Two machines, two camos
 
-In F12, under **Machine model**, pick **Default** (Black Ops III) or **Origins** (the stone machine from Origins, with its own sounds). Each machine gives its own camo:
+In F12, under **Machine model**, pick **Default** (the classic machine) or **Origins** (the stone machine from Origins, with its own sounds). Each machine gives its own camo:
 
-- **Default:** the BO1 Pack-a-Punch camo. Glossy black, with red circuitry that shows in the light and in reflections.
+- **Default:** the original Pack-a-Punch camo. Glossy black, with red circuitry that shows in the light and in reflections.
 - **Origins:** slowly drifting blue crystal on the metal, and metal plating on the furniture and attachments.
 
 The camo covers the whole gun body, including handguards, stocks and tan or FDE parts. Rubber, foam and fabric parts keep their own look.
@@ -80,9 +83,14 @@ F12 has:
 - enemy 115 guns
 - Sally
 - the machine model
-- **Debug > Restart 115 Riddles**, if your quest got stuck
 
 Server settings (costs, quest texts, rock spots) are in `SPT_Runtime\user\mods\PaPHideoutServer\config.json`.
+
+## Compatibility
+
+- Never changes another mod's files, settings or load order.
+- Works with Fika co-op as it is; Fika itself isn't changed.
+- Other gun and item mods work alongside it.
 
 ## For mod authors
 
@@ -90,11 +98,11 @@ Any gun works with the machine as it is. Use the [PaP API](API.md) to give your 
 
 ## Credits
 
-- **Kennerz**: the mod.
+- **Kenner**: the mod.
 - **trappuss**: [Hideout Uncensored](https://sp-mod.com/mod/3167/hideout-uncensored) ([GitHub](https://github.com/trappuss/SPT-Mods-Release)), required for weapons in the hideout. It isn't included, so install it separately.
-- **Pack-a-Punch machines, camos, rocks, sounds and music:** from **Call of Duty: Black Ops, Black Ops II and Black Ops III Zombies** (Treyarch / Activision), exported with Greyhound and GrayWolf.
+- **Pack-a-Punch machines, camos, rocks, sounds and music:** third-party game assets, exported with Greyhound and GrayWolf.
 
-This is a free, non-commercial fan mod. All Call of Duty assets belong to their owners.
+This is a free, non-commercial fan mod. All third-party assets belong to their respective owners.
 
 ## Building from source
 
@@ -104,11 +112,13 @@ This is a free, non-commercial fan mod. All Call of Duty assets belong to their 
 
 ## Changelog
 
+- **2.2.0:** a one-time choice to show the mod's hideout features in normal SPT play or keep them for the zombies mode only; Pack-a-Punched shots hit with their own impacts; the camo can be drawn at its own size per gun (the Thundergun's is finer now); the F12 menu is trimmed to the volumes and the gameplay options; part of Dr K's SPZombies. The 115 rocks now show on Factory with Fika too, also on a Fika headless.
+
 - **2.1.1:** Fixed: Mustang & Sally grenades have their wider blast again (it was switched off on this game version).
 - **2.1.0:**
   - **Re-pack:** re-insert an upgraded gun in the other machine for 5,000 roubles to swap its camo. This works on the Ray Gun and Thundergun too.
   - **Insurance:** insured 115 guns come back still upgraded.
-  - **Default camo:** reworked to match BO1: glossy black with spaced-out red circuitry that catches the light. It now covers handguards, stocks and FDE parts.
+  - **Default camo:** reworked to match the original: glossy black with spaced-out red circuitry that catches the light. It now covers handguards, stocks and FDE parts.
   - **Origins camo:** the crystal moves slowly, like something suspended in jelly. Dials get metal plating.
   - **Smoke:** red barrel smoke and suppressor gas on upgraded guns.
   - **Fixes:**

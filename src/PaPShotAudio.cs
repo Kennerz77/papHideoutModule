@@ -6,9 +6,9 @@ using UnityEngine;
 namespace PaPHideoutModule
 {
     /// <summary>
-    /// BO3's Pack-a-Punch shot sound on top of the normal gunshot of 115 Infused weapons, picked by weapon class
-    /// (BO3 has its own PaP fire sound per weapon family; the generic layer covers the rest), each shot closed by BO3's
-    /// PaP tail (wpn_pap_last_custom), quieter, overlapping in full auto as in COD.
+    /// The original's Pack-a-Punch shot sound on top of the normal gunshot of 115 Infused weapons, picked by weapon class
+    /// (the original has its own PaP fire sound per weapon family; the generic layer covers the rest), each shot closed by the original's
+    /// PaP tail (wpn_pap_last_custom), quieter, overlapping in full auto as in the original.
     /// One shot layer per gun: each shot restarts that gun's own audio source instead of stacking copies.
     /// </summary>
     internal static class PaPShotAudio
@@ -43,6 +43,15 @@ namespace PaPHideoutModule
                 NoTails.Add(templateId);
         }
 
+        // Mod guns that play their own shot sound when infused too: Pack-a-Punch adds no shot and no tail
+        private static readonly HashSet<string> OwnSound = new HashSet<string>();
+
+        public static void KeepOwnSound(string templateId)
+        {
+            if (!string.IsNullOrEmpty(templateId))
+                OwnSound.Add(templateId);
+        }
+
         public static void Register(string templateId, AudioClip shot, AudioClip tail)
         {
             if (!string.IsNullOrEmpty(templateId))
@@ -51,6 +60,8 @@ namespace PaPHideoutModule
 
         public static void OnShot(bool yourPlayer, int shooterId, Vector3 position, Weapon weapon)
         {
+            if (OwnSound.Contains(weapon.TemplateId.ToString()))
+                return;
             // A weapon's own PaP sound (other mods, through PaPApi), else the layer for its class
             Custom.TryGetValue(weapon.TemplateId.ToString(), out var own);
             AudioClip clip = own.shot ?? PaPAssets.Clip(ClipFor(weapon)) ?? PaPAssets.Clip(yourPlayer ? "pap_shot_first_plr" : "pap_shot_first_npc");
@@ -74,10 +85,10 @@ namespace PaPHideoutModule
                 shooter.Shot.transform.position = shooter.Tail.transform.position = position;
 
             Play(shooter.Shot, clip, yourPlayer ? 1f : PaPHideoutModulePlugin.EnemyShotVolume.Value);
-            // Every shot ends in the tail, quieter, and tails overlap like COD's in full auto (one-shots stack)
+            // Every shot ends in the tail, quieter, and tails overlap like the original's in full auto (one-shots stack)
             AudioClip tail = own.tail ?? PaPAssets.Clip(yourPlayer ? "pap_shot_tail_plr" : "pap_shot_tail_npc");
             if (tail != null && !NoTails.Contains(weapon.TemplateId.ToString()))
-                shooter.Tail.PlayOneShot(tail, Mathf.Clamp01(PaPHideoutModulePlugin.ShotSoundVolume.Value * Presence * (yourPlayer ? 1f : PaPHideoutModulePlugin.EnemyShotVolume.Value) * PaPHideoutModulePlugin.TailVolume.Value * (IsSlowGun(weapon) ? SlowTailLevel : TailLevel)));
+                shooter.Tail.PlayOneShot(tail, Mathf.Clamp(PaPHideoutModulePlugin.ShotSoundVolume.Value * Presence * (yourPlayer ? 1f : PaPHideoutModulePlugin.EnemyShotVolume.Value) * PaPHideoutModulePlugin.TailVolume.Value * (IsSlowGun(weapon) ? SlowTailLevel : TailLevel), 0f, 3f));
         }
 
         private static bool IsSlowGun(Weapon weapon)
@@ -103,7 +114,7 @@ namespace PaPHideoutModule
             source.Play(); // restarts: never more than one PaP shot sound per gun
         }
 
-        /// <summary>Closest BO3 PaP weapon family for a Tarkov weapon class (works for modded guns: it's the class, not the gun).</summary>
+        /// <summary>Closest the original PaP weapon family for a Tarkov weapon class (works for modded guns: it's the class, not the gun).</summary>
         private static string ClipFor(Weapon weapon)
         {
             switch (weapon.WeapClass?.ToLowerInvariant())

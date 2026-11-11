@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Reflection;
 using SPTarkov.Reflection.Patching;
 using SPTarkov.Server.Core.Controllers;
@@ -28,7 +27,7 @@ internal static class PaPQuestPatches
         foreach (AbstractPatch patch in new AbstractPatch[]
                  {
                      new ClientQuestsPatch(), new WallOpenedPatch(), new HandoverPatch(),
-                     new RaidSidePatch(), new RaidLootPatch(), new StartUpgradePatch(),
+                     new RaidLootPatch(), new StartUpgradePatch(),
                      new DiscardPatch(), new SellPatch(),
                  })
         {
@@ -123,37 +122,41 @@ internal static class PaPQuestPatches
         }
     }
 
-    // Raid loot is made inside StartLocalRaidAsync, which knows PMC or scav; the loot method itself doesn't
-    private static readonly ConcurrentDictionary<MongoId, string> RaidSides = new();
-
-    private sealed class RaidSidePatch : AbstractPatch
+    /// <summary>
+    /// Adds the fragments the player still needs to their raid's loot (PMC raids only). Done on the raid start's answer,
+    /// not where the loot is made: with Fika the loot is made earlier (when the raid is created, solo too) and the
+    /// start only hands it out, so the old hook on the loot method never saw a PMC raid there. Every raid start comes
+    /// through here, with or without Fika. In co-op the host's game spawns the loot, so the host's rocks are the ones
+    /// that show. On a Fika headless the headless starts the raid, so the player who asked it for the raid counts as
+    /// the host (PaPQuestService.LootOwner).
+    /// </summary>
+    private sealed class RaidLootPatch : AbstractPatch
     {
         protected override MethodBase? GetTargetMethod() => typeof(LocationLifecycleService).GetMethod(nameof(LocationLifecycleService.StartLocalRaidAsync));
 
-        [PatchPrefix]
-        private static void Prefix(MongoId sessionId, StartLocalRaidRequestData request) =>
-            RaidSides[sessionId] = request.PlayerSide ?? "";
-    }
-
-    /// <summary>Adds the fragments the player still needs to their raid's loot (PMC raids only).</summary>
-    private sealed class RaidLootPatch : AbstractPatch
-    {
-        protected override MethodBase? GetTargetMethod() => typeof(LocationLifecycleService).GetMethod(nameof(LocationLifecycleService.GenerateLocationAndLoot));
-
         [PatchPostfix]
-        private static void Postfix(MongoId sessionId, string name, bool generateLoot, LocationBase __result)
+        private static void Postfix(MongoId sessionId, StartLocalRaidRequestData request, ref Task<StartLocalRaidResponseData> __result) =>
+            __result = AddFragments(__result, sessionId, request);
+
+        private static async Task<StartLocalRaidResponseData> AddFragments(Task<StartLocalRaidResponseData> start, MongoId sessionId, StartLocalRaidRequestData request)
         {
-            if (!generateLoot || !RaidSides.TryRemove(sessionId, out string? side) || !string.Equals(side, "pmc", StringComparison.OrdinalIgnoreCase))
-                return;
+            StartLocalRaidResponseData response = await start;
+            if (response?.LocationLoot == null || PaPQuestService.Instance is not { } quest)
+                return response!;
+            // A Fika headless starts the raid under its own profile: its host's rocks go in (whatever side it says)
+            MongoId owner = quest.LootOwner(sessionId);
+            if (owner == sessionId && !string.Equals(request?.PlayerSide, "pmc", StringComparison.OrdinalIgnoreCase))
+                return response;
             try
             {
-                PaPQuestService.Instance?.AddRaidFragments(sessionId, name, __result);
+                quest.AddRaidFragments(owner, request?.Location ?? response.LocationLoot.Id ?? "", response.LocationLoot);
             }
             catch (Exception e)
             {
                 // never let the quest stop a raid from starting
                 Console.WriteLine($"[PaP] Could not place 115 fragments: {e}");
             }
+            return response;
         }
     }
 }

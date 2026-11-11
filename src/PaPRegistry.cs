@@ -29,6 +29,12 @@ namespace PaPHideoutModule
 
         public static IReadOnlyCollection<string> All => _infused;
 
+        /// <summary>
+        /// The server's InNormalGame (config.json): false = zombies only, no hideout machine, rocks or enemy 115 guns
+        /// (the gun upgrades themselves still work, for zombies). Only meaningful once <see cref="Loaded"/>.
+        /// </summary>
+        public static bool InNormalGame { get; private set; } = true;
+
         /// <summary>True once the state has been fetched from the server at least once.</summary>
         public static bool Loaded { get; private set; }
 
@@ -154,6 +160,7 @@ namespace PaPHideoutModule
                         PaPOrigins.Move(pair.Substring(0, split), pair.Substring(split + 1));
                 }
                 FragmentScales = state.fragmentScales ?? new Dictionary<string, float>();
+                InNormalGame = state.inNormalGame ?? true; // an older server: always on
                 Loaded = true;
                 return true;
             }
@@ -173,6 +180,7 @@ namespace PaPHideoutModule
             public List<string> infused;
             public Dictionary<string, float> fragmentScales;
             public List<string> moved;
+            public bool? inNormalGame;
         }
 #pragma warning restore CS0649
     }

@@ -5,7 +5,7 @@ using System.Linq;
 namespace PaPHideoutModule
 {
     /// <summary>
-    /// Guns upgraded in the Origins machine wear the Origins camo (blue crystal) instead of the BO1 one. The server
+    /// Guns upgraded in the Origins machine wear the Origins camo (blue crystal) instead of the the original one. The server
     /// doesn't know the difference, so the ids are kept here, in origins_guns.txt beside the DLL.
     /// </summary>
     internal static class PaPOrigins

@@ -28,13 +28,19 @@ namespace PaPHideoutModule
 
         /// <summary>
         /// Gives a weapon template its own Pack-a-Punch shot sound (and optionally its own tail), in place of the layer
-        /// picked by weapon class. For mod weapons with a BO3 PaP sound of their own (the Ray Gun's, the Thundergun's).
+        /// picked by weapon class. For mod weapons with a the original PaP sound of their own (the Ray Gun's, the Thundergun's).
         /// </summary>
         public static void RegisterShotSound(string templateId, AudioClip shot, AudioClip tail = null) =>
             PaPShotAudio.Register(templateId, shot, tail);
 
         /// <summary>
-        /// The weapon template keeps its own look when infused: no BO1 camo on it or on what sits on it. For mod weapons
+        /// The weapon template plays its own shot sound when infused, exactly as when plain: Pack-a-Punch adds no shot
+        /// layer and no tail for it (the Ray Gun, whose PaP'd shot should sound like its plain one).
+        /// </summary>
+        public static void KeepOwnShotSound(string templateId) => PaPShotAudio.KeepOwnSound(templateId);
+
+        /// <summary>
+        /// The weapon template keeps its own look when infused: no the original camo on it or on what sits on it. For mod weapons
         /// whose upgraded look the mod handles itself (listen to <see cref="WeaponUpgraded"/> or check <see cref="IsInfused(Item)"/>).
         /// </summary>
         public static void ExcludeFromCamo(string templateId) => PaPCamo.Exclude(templateId);
@@ -63,6 +69,13 @@ namespace PaPHideoutModule
 
         /// <summary>On an Origins gun, materials with this word in their name keep their plain look.</summary>
         public static void KeepOriginsPlain(string materialWord) => PaPCamo.KeepOriginsPlain(materialWord);
+
+        /// <summary>
+        /// Draws the camo on materials whose name contains this word at a different size: scale 2 = the pattern twice as
+        /// small (tiled twice as often), 0.5 = twice as big. For models whose texture layout stretches the camo. Call once
+        /// at startup, before anything is painted. (PaP 2.1.2+)
+        /// </summary>
+        public static void SetCamoTiling(string materialWord, float scale) => PaPCamo.SetTiling(materialWord, scale);
 
         /// <summary>This weapon plays its own shot sound only: no Pack-a-Punch shot tail on top.</summary>
         public static void NoShotTail(string templateId) => PaPShotAudio.NoTail(templateId);

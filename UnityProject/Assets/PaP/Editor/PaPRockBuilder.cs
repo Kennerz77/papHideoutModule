@@ -6,24 +6,25 @@ using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// The five 115-infused rock fragments for "115 Riddles": Assets/PaP/Rocks/pap_rock_1..5.prefab. Small BO3 debris
+/// The five 115-infused rock fragments for "115 Riddles": Assets/PaP/Rocks/pap_rock_1..5.prefab. Small the original debris
 /// rocks wearing a baked 115 texture set: Origins hex stone with pockets of the Zetsubou 115 crystal, which glow
 /// through the Pack-a-Punch crystal emissive. Each prefab sits on its pivot (bottom centre) at scale 1; the plugin
 /// pulses the glow and scales them per spawn.
 /// </summary>
 public static class PaPRockBuilder
 {
-    private const string Xmodels = @"E:\Greyhound boz\exported_files\black_ops_3\xmodels";
-    private const string StoneSource = Xmodels + @"\p7_zm_ori_rock_hex_single_sml_01\_images\mtl_p7_zm_ori_rock_hex_single_sml_01\i_mtl_p7_zm_ori_rock_hex_rock_pattern_c.png";
-    private const string CrystalDir = Xmodels + @"\p7_zm_ori_rock_hex_glow_lrg_01\_images\mtl_p7_zm_ori_crystal_ice_emissive";
-    private const string CrystalSource = CrystalDir + @"\i_mtl_p7_zm_isl_crystal_115_01_c.png";
-    private const string GlowSource = CrystalDir + @"\i_mtl_p7_zm_ctl_packapunch_crystal_e.png";
+    // The asset export folder on the author's PC: the KZ_EXPORT_ROOT user environment variable (kept out of the source)
+    private static readonly string Xmodels = System.IO.Path.Combine(System.Environment.GetEnvironmentVariable("KZ_EXPORT_ROOT", System.EnvironmentVariableTarget.User) ?? "", @"xmodels");
+    private static readonly string StoneSource = Xmodels + @"\p7_zm_ori_rock_hex_single_sml_01\_images\mtl_p7_zm_ori_rock_hex_single_sml_01\i_mtl_p7_zm_ori_rock_hex_rock_pattern_c.png";
+    private static readonly string CrystalDir = Xmodels + @"\p7_zm_ori_rock_hex_glow_lrg_01\_images\mtl_p7_zm_ori_crystal_ice_emissive";
+    private static readonly string CrystalSource = CrystalDir + @"\i_mtl_p7_zm_isl_crystal_115_01_c.png";
+    private static readonly string GlowSource = CrystalDir + @"\i_mtl_p7_zm_ctl_packapunch_crystal_e.png";
 
     public const string Dir = "Assets/PaP/Rocks";
     public const int Count = 5;
     public static string PrefabPath(int index) => $"{Dir}/pap_rock_{index + 1}.prefab";
 
-    private const float Scale = 0.0254f; // CoD units are inches
+    private const float Scale = 0.0254f; // The original game units are inches
     private const int Size = 1024;
 
     /// <summary>Which debris rock each fragment uses, and how it is sized and turned, so no two look alike.</summary>
@@ -129,9 +130,9 @@ public static class PaPRockBuilder
     private const float GreenRockLength = 0.3f; // metres, longest side (the placement scale can change it per rock)
 
     /// <summary>
-    /// The hideout's green 115 rock: BO3's Origins artifact piece as it is, its carved stone and its green gem, each
+    /// The hideout's green 115 rock: the original's Origins artifact piece as it is, its carved stone and its green gem, each
     /// with its own textures. The gem glows through the Pack-a-Punch crystal emissive, tinted green, with a soft green
-    /// light inside. The decal layer is left out: it sits on the stone's surface and would flicker without BO3's decal
+    /// light inside. The decal layer is left out: it sits on the stone's surface and would flicker without the original's decal
     /// shader. Pivot at the bottom centre, scale 1.
     /// </summary>
     private static void BuildGreenRock()
@@ -318,7 +319,7 @@ public static class PaPRockBuilder
             int baseIndex = vertices.Count;
             for (int v = 0; v < m.VertexCount; v++)
             {
-                // CoD is right-handed Z-up, Unity left-handed Y-up (same mapping as the machine)
+                // The original game is right-handed Z-up, Unity left-handed Y-up (same mapping as the machine)
                 SEVec3 p = m.Positions[v];
                 vertices.Add(shape.MultiplyPoint3x4(new Vector3(-p.X, p.Z, -p.Y) * Scale));
                 Vector3 n = m.Normals != null ? new Vector3(-m.Normals[v].X, m.Normals[v].Z, -m.Normals[v].Y) : Vector3.up;

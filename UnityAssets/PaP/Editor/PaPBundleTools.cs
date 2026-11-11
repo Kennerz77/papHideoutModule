@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// Unity 2022.3.43f1 editor helpers for the PaP Hideout Module.
-/// Menu: PaP > 1. Import BO3 Pack-a-Punch, then PaP > 2. Build pap_hideout.bundle.
+/// Menu: PaP > 1. Import the original Pack-a-Punch, then PaP > 2. Build pap_hideout.bundle.
 /// Batch: Unity.exe -batchmode -quit -projectPath ... -executeMethod PaPBundleTools.RunAllBatch
 /// </summary>
 public static class PaPBundleTools
@@ -85,7 +85,7 @@ public static class PaPBundleTools
                     "Assets/PaP/Audio/pap_shot_pistol.wav",
                     "Assets/PaP/Audio/pap_shot_pistol_auto.wav",
                     "Assets/PaP/Audio/pap_shot_launcher.wav",
-                    // BO3's wpn_pap_last_custom: the tail that closes the PaP shot
+                    // The original's wpn_pap_last_custom: the tail that closes the PaP shot
                     "Assets/PaP/Audio/pap_shot_tail_plr.wav",
                     "Assets/PaP/Audio/pap_shot_tail_npc.wav",
                     // Loaded by name: the machine's start-up and the 115 rocks' hum (loose WAVs next to the DLL

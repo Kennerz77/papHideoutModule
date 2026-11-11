@@ -308,6 +308,8 @@ public class PaPProfileStoreHook(ISptLogger<PaPProfileStoreHook> logger) : IOnLo
     public Task OnLoadAsync(CancellationToken cancellationToken)
     {
         PaPProfileStore.LogError = message => logger.Error(message);
+        // Players who switched Pack-a-Punch off for normal gameplay: what they had from it goes (before anything reads it)
+        PaPNormalGame.RemoveOff(message => logger.Info(message));
         try
         {
             new PaPProfileStore.ProfileWritePatch().Enable();
@@ -336,6 +338,8 @@ public class PaPProfileStoreLoader(ISptLogger<PaPProfileStoreLoader> logger, Sav
     {
         foreach (var (id, profile) in saveServer.GetProfiles())
         {
+            if (!PaPNormalGame.Now(id.ToString()))
+                continue; // zombies only: nothing kept to put back (PaPNormalGame removed it at start)
             try
             {
                 string? restored = PaPProfileStore.Restore(id, profile, jsonUtil);

@@ -13,6 +13,8 @@
     <GamePath>D:\OTHER LAUNCHERS\BUTTERSTATE</GamePath>
     <ManagedPath>$(GamePath)\EscapeFromTarkov_Data\Managed</ManagedPath>
     <PluginOutputPath>$(GamePath)\BepInEx\plugins\PaPHideoutModule</PluginOutputPath>
+    <!-- Release builds (-p:ReleaseBuild=true): F12 shows players only their settings (ReleaseMenu.cs) -->
+    <DefineConstants Condition="'$(ReleaseBuild)' == 'true'">$(DefineConstants);RELEASE</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using EFT;
 using EFT.AssetsManager;
@@ -8,7 +8,7 @@ using UnityEngine;
 namespace PaPHideoutModule
 {
     /// <summary>
-    /// Paints the BO1 Pack-a-Punch camo on item models, part by part. The camo belongs to the 115 Infused gun: every
+    /// Paints the the original Pack-a-Punch camo on item models, part by part. The camo belongs to the 115 Infused gun: every
     /// part wears it while it sits on one, and none anywhere else. Each part is matched to its item through the
     /// model's slot views, so an attachment is judged by where it sits now. Painted materials are cached per original
     /// material, so repainting is just a material swap and the same gun never builds new materials twice.
@@ -24,7 +24,7 @@ namespace PaPHideoutModule
         private static readonly int EmissionMap = Shader.PropertyToID("_EmissionMap");
         private static readonly int EmissionColor = Shader.PropertyToID("_EmissionColor");
         private const float CamoEmission = 0.06f;
-        // The default camo's texture is already jet black with red traces (the BO1 maps, baked by the bundle build): no
+        // The default camo's texture is already jet black with red traces (the the original maps, baked by the bundle build): no
         // tint, and the glow is the texture itself, so only the traces light up
         private static readonly Color DefaultTint = Color.white;
         private static readonly Color DefaultGlow = new Color(0.25f, 0.25f, 0.25f, 1f);
@@ -43,7 +43,7 @@ namespace PaPHideoutModule
         private static bool _iconPass;
         private static readonly Dictionary<Material, Material>[] IconKinds =
             { new Dictionary<Material, Material>(), new Dictionary<Material, Material>(), new Dictionary<Material, Material>(), new Dictionary<Material, Material>() };
-        // 0 BO1 camo, 1 Origins crystal, 2 Origins metal plating, 3 Origins split: crystal and plating on one material
+        // 0 the original camo, 1 Origins crystal, 2 Origins metal plating, 3 Origins split: crystal and plating on one material
         private static readonly Dictionary<Material, Material>[] PaintedKinds =
             { Painted, new Dictionary<Material, Material>(), new Dictionary<Material, Material>(), new Dictionary<Material, Material>() };
 
@@ -150,6 +150,24 @@ namespace PaPHideoutModule
                 OriginsCutouts.Add(materialWord.ToLowerInvariant());
         }
 
+        // Materials whose camo is drawn smaller (or bigger) than the default: word in the material name -> times the tiling
+        private static readonly List<(string word, float scale)> TilingScales = new List<(string, float)>();
+
+        public static void SetTiling(string materialWord, float scale)
+        {
+            if (!string.IsNullOrEmpty(materialWord) && scale > 0f)
+                TilingScales.Add((materialWord.ToLowerInvariant(), scale));
+        }
+
+        private static float TilingScale(Material original)
+        {
+            string name = original != null ? original.name.ToLowerInvariant() : "";
+            foreach (var t in TilingScales)
+                if (name.Contains(t.word))
+                    return t.scale;
+            return 1f;
+        }
+
         public static void KeepOriginsPlain(string materialWord)
         {
             if (!string.IsNullOrEmpty(materialWord))
@@ -185,7 +203,35 @@ namespace PaPHideoutModule
         /// own property block (written as the gun fires, and which replaces ours) can't leave it dark for a frame.
         /// </summary>
         /// <summary>Also every LateUpdate, in case the game's cameras never raise onPreCull.</summary>
-        public static void AnimateLate() => AnimateCrystalSlots(Time.time);
+        // Only when no camera pre-cull ran last frame: with both it ran twice a frame, and the pre-cull one has to win
+        public static void AnimateLate()
+        {
+            if (_animatedFrame >= Time.frameCount - 1)
+                return;
+            AnimateCrystalSlots(Time.time);
+        }
+
+        // Reused every frame so the crystal makes no garbage (the old copies fed the GC: a hitch on Tarkov's big heap)
+        private static readonly List<Renderer> DeadRenderers = new List<Renderer>();
+        private static readonly List<int> SlotScratch = new List<int>();
+        private static readonly List<Material> MatScratch = new List<Material>();
+        // Material.name makes a new string each call: whether a material is the crystal / a picture's copy, worked out once
+        private static readonly Dictionary<Material, (bool crystal, bool icon)> CrystalNames = new Dictionary<Material, (bool, bool)>();
+        private static readonly int MainTexId = Shader.PropertyToID("_MainTex");
+        private static readonly int ColorId = Shader.PropertyToID("_Color");
+        private static readonly int DetailAlbedoId = Shader.PropertyToID(DetailST_Name);
+
+        private static (bool crystal, bool icon) NameOf(Material m)
+        {
+            if (!CrystalNames.TryGetValue(m, out var seen))
+            {
+                if (CrystalNames.Count > 4096)
+                    CrystalNames.Clear(); // copies of unloaded guns pile up otherwise
+                string name = m.name;
+                CrystalNames[m] = seen = (name.Contains(CrystalTag), name.Contains(IconTag));
+            }
+            return seen;
+        }
 
         public static void HookRendering() => Camera.onPreCull += _ =>
         {
@@ -221,17 +267,29 @@ namespace PaPHideoutModule
                 return;
             float shade = 0.92f + 0.08f * Mathf.Sin(t * 0.4f + 0.6f * Mathf.Sin(t * 0.21f));
             float pulse = 0.45f + 0.2f * Mathf.Sin(t * 0.5f) + 0.1f * Mathf.Sin(t * 1.3f);
-            foreach (Renderer dead in CrystalSlots.Keys.Where(r => r == null).ToList())
+            DeadRenderers.Clear();
+            foreach (Renderer r in CrystalSlots.Keys)
+                if (r == null)
+                    DeadRenderers.Add(r);
+            foreach (Renderer dead in DeadRenderers)
                 CrystalSlots.Remove(dead);
+            // Barely drifting, swaying back and forth: suspended in jelly rather than flowing
+            var flow = new Vector2(t * 0.008f + 0.025f * Mathf.Sin(t * 0.31f), t * 0.005f + 0.02f * Mathf.Sin(t * 0.23f + 1.7f));
+            Color body = new Color(shade, shade, shade, 1f) * 1.15f;
+            Color glow = new Color(0.35f, 0.85f, 1f) * (1.0f + 1.2f * pulse);
             foreach (var pair in CrystalSlots)
             {
                 if (!pair.Key.isVisible)
                     continue;
-                Material[] mats = pair.Key.sharedMaterials;
-                foreach (int slot in pair.Value.ToList())
+                pair.Key.GetSharedMaterials(MatScratch);
+                SlotScratch.Clear();
+                SlotScratch.AddRange(pair.Value);
+                foreach (int slot in SlotScratch)
                 {
                     // Only the Origins crystal moves (the default camo never does); a slot no longer wearing it is cleared
-                    if (slot >= mats.Length || mats[slot] == null || !mats[slot].name.Contains(CrystalTag))
+                    Material m = slot < MatScratch.Count ? MatScratch[slot] : null;
+                    (bool crystal, bool icon) kind = m != null ? NameOf(m) : (false, false);
+                    if (!kind.crystal)
                     {
                         pair.Value.Remove(slot);
                         ClearBlock(pair.Key, slot);
@@ -239,22 +297,18 @@ namespace PaPHideoutModule
                     }
                     // Set on the material the renderer really draws (the game's own copy of ours, if it made one):
                     // property blocks never showed on guns in the hands
-                    Material m = mats[slot];
-                    if (m.name.Contains(IconTag))
+                    if (kind.icon)
                         continue; // a picture's copy keeps the dimmed colour it was given
-                    // Barely drifting, swaying back and forth: suspended in jelly rather than flowing
-                    var flow = new Vector2(t * 0.008f + 0.025f * Mathf.Sin(t * 0.31f), t * 0.005f + 0.02f * Mathf.Sin(t * 0.23f + 1.7f));
                     if (m.IsKeywordEnabled("_DETAIL_MULX2"))
                     {
-                        m.SetTextureOffset(DetailST_Name, flow);
+                        m.SetTextureOffset(DetailAlbedoId, flow);
                     }
                     else
                     {
-                        m.SetTextureOffset("_MainTex", flow);
-                        m.SetColor("_Color", new Color(shade, shade, shade, 1f) * 1.15f);
+                        m.SetTextureOffset(MainTexId, flow);
+                        m.SetColor(ColorId, body);
                     }
-                    if (!m.name.Contains(IconTag))
-                        m.SetColor(EmissionColor, new Color(0.35f, 0.85f, 1f) * (1.0f + 1.2f * pulse));
+                    m.SetColor(EmissionColor, glow);
                 }
             }
         }
@@ -277,8 +331,9 @@ namespace PaPHideoutModule
                     m.SetColor(EmissionColor, new Color(pulse, pulse, pulse, 1f));
                 // The colour map itself breathes too (not every gun shader takes an emission map)
                 float shade = 0.92f + 0.08f * Mathf.Sin(t * 0.4f + 0.6f * Mathf.Sin(t * 0.21f));
-                foreach (int color in BaseColors.Where(m.HasProperty))
-                    m.SetColor(color, new Color(shade, shade, shade, 1f));
+                foreach (int color in BaseColors)
+                    if (m.HasProperty(color))
+                        m.SetColor(color, new Color(shade, shade, shade, 1f));
             }
         }
 
@@ -365,13 +420,17 @@ namespace PaPHideoutModule
         /// <summary>Applies a new camo tiling to every painted material.</summary>
         public static void UpdateTiling(float tiling)
         {
-            foreach (Material painted in PaintedKinds[0].Values)
+            foreach (var pair in PaintedKinds[0])
             {
+                Material painted = pair.Value;
+                if (painted == null)
+                    continue;
+                float t = tiling * TilingScale(pair.Key);
                 int texture = BaseColorTexture(painted);
                 if (texture != 0)
-                    painted.SetTextureScale(texture, new Vector2(tiling, tiling));
+                    painted.SetTextureScale(texture, new Vector2(t, t));
                 if (painted.HasProperty(EmissionMap))
-                    painted.SetTextureScale(EmissionMap, new Vector2(tiling, tiling));
+                    painted.SetTextureScale(EmissionMap, new Vector2(t, t));
             }
         }
 
@@ -520,12 +579,12 @@ namespace PaPHideoutModule
             if (cache.TryGetValue(original, out Material painted) && painted != null)
                 return painted;
             if (camo == null)
-                camo = PaPAssets.CamoAlbedo; // an Origins texture that isn't in the bundle: the BO1 look
+                camo = PaPAssets.CamoAlbedo; // an Origins texture that isn't in the bundle: the the original look
 
             Shader glowing = IsCrystal(kind) ? Shader.Find("Standard (Specular setup)") : null;
             painted = glowing != null ? new Material(glowing) { name = PaintedName(original, kind) } : new Material(original) { name = PaintedName(original, kind) };
             int texture = glowing != null ? Shader.PropertyToID("_MainTex") : BaseColorTexture(painted);
-            float tiling = kind == 0 ? DefaultTiling : PaPHideoutModulePlugin.CamoTiling;
+            float tiling = (kind == 0 ? DefaultTiling : PaPHideoutModulePlugin.CamoTiling) * TilingScale(original);
             painted.SetTexture(texture, camo);
             painted.SetTextureScale(texture, new Vector2(tiling, tiling));
             painted.SetTextureOffset(texture, Vector2.zero);
@@ -536,7 +595,7 @@ namespace PaPHideoutModule
                 painted.SetFloat(HasTint, 0f);
             if (kind == 0 && painted.HasProperty(BaseTintColor))
                 painted.SetColor(BaseTintColor, Color.white);
-            // BO1's spec map: the circuitry shows in the highlights and reflections, and the surface is glossy
+            // The original's spec map: the circuitry shows in the highlights and reflections, and the surface is glossy
             Texture2D spec = kind == 0 ? PaPAssets.CamoSpec : null;
             if (spec != null && painted.HasProperty(SpecMap))
             {
@@ -710,7 +769,7 @@ namespace PaPHideoutModule
         }
 
         /// <summary>
-        /// Which look a material gets: -1 none, 0 the BO1 camo (shiny black, metal only), 1 Origins crystal, 2 Origins
+        /// Which look a material gets: -1 none, 0 the the original camo (shiny black, metal only), 1 Origins crystal, 2 Origins
         /// metal plating (furniture and attachments of an Origins gun). The reasons for skipping are logged once.
         /// </summary>
         private static int PaintKind(Material mat, Item owner, Renderer renderer)
@@ -904,7 +963,7 @@ namespace PaPHideoutModule
             if (renderer != null && OriginsPartRoles.Count > 0 && mat.shader != null && BaseColorTexture(mat) != 0 && mat.renderQueue <= 2450 && OnOriginsGun(owner))
             {
                 string part = renderer.name.ToLowerInvariant();
-                // A dial's face is metal plating too (as on BO2's Origins guns)
+                // A dial's face is metal plating too (as on the original's Origins guns)
                 if (mat.name.ToLowerInvariant().Contains("meter"))
                     return Note(mat, 2);
                 foreach (var (word, crystal) in OriginsPartRoles)
@@ -921,7 +980,9 @@ namespace PaPHideoutModule
                 return Skip(mat, "shader " + mat.shader.name);
             bool mounted = owner != null && !(owner is Weapon);
             string ownerKind = mounted ? owner.GetType().Name.ToLowerInvariant() : "";
-            bool optic = SkipOwnerWords.Any(ownerKind.Contains) || (mounted && InCategory(owner, SightsCategory));
+            // Iron sights are part of the gun: they take the camo; optics, lights and lasers keep their own look
+            bool iron = owner is IronSight;
+            bool optic = !iron && (SkipOwnerWords.Any(ownerKind.Contains) || (mounted && InCategory(owner, SightsCategory)));
             // Material and texture names are the only hint of what a part is made of
             string name = mat.name.ToLowerInvariant();
             Texture main = mat.GetTexture(BaseColorTexture(mat));
@@ -936,7 +997,7 @@ namespace PaPHideoutModule
             {
                 // Attachments (sights, scopes, lasers, lights, grips, muzzle devices, mounts, magazines) keep their look;
                 // the gun itself and its structure (barrel, handguard, stock, pistol grip, gas block...) are painted
-                if (mounted && !StructuralSlots.Contains(SlotOf(owner)) && !AlwaysPaintWords.Any(name.Contains))
+                if (mounted && !iron && !StructuralSlots.Contains(SlotOf(owner)) && !AlwaysPaintWords.Any(name.Contains))
                     return Skip(mat, "attachment (" + SlotOf(owner) + ")");
                 // Magazines keep their own look on the default camo (a mod gun's own parts opt in through KeepMaterialsPlain)
                 if (owner is Magazine && !AlwaysPaintWords.Any(name.Contains))

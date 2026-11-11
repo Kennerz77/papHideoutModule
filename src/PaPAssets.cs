@@ -87,7 +87,7 @@ namespace PaPHideoutModule
         /// <summary>The Origins stone machine (F12 > Machine model), or null if the bundle doesn't have it.</summary>
         public static GameObject OriginsPrefab => _originsPrefab != null ? _originsPrefab : _originsPrefab = Load<GameObject>(OriginsPrefabName);
 
-        /// <summary>BO1's spec map (red-copper traces, gloss in alpha): the default camo's highlights, or null.</summary>
+        /// <summary>the original's spec map (red-copper traces, gloss in alpha): the default camo's highlights, or null.</summary>
         public static Texture2D CamoSpec => Preloading ? null : _camoSpec != null ? _camoSpec : _camoSpec = Load<Texture2D>("pap_camo_spec");
         private static Texture2D _camoSpec;
 
@@ -136,12 +136,12 @@ namespace PaPHideoutModule
 
         private static AudioClip _denyClip;
 
-        /// <summary>BO3's "can't afford it" buzz (pap_deny.wav beside the DLL), for the machine refusing an upgrade.</summary>
+        /// <summary>the original's "can't afford it" buzz (pap_deny.wav beside the DLL), for the machine refusing an upgrade.</summary>
         public static AudioClip DenyClip => _denyClip != null ? _denyClip : _denyClip = LooseWav("pap_deny");
 
         private static AudioClip _acceptClip;
 
-        /// <summary>BO3's purchase "cha-ching" (pap_accept.wav beside the DLL), for a paid upgrade.</summary>
+        /// <summary>the original's purchase "cha-ching" (pap_accept.wav beside the DLL), for a paid upgrade.</summary>
         public static AudioClip AcceptClip => _acceptClip != null ? _acceptClip : _acceptClip = LooseWav("pap_accept");
 
         /// <summary>A plain 16-bit PCM WAV next to the DLL, built into a clip.</summary>
@@ -293,19 +293,19 @@ namespace PaPHideoutModule
 
         private static GameObject _greenRock;
 
-        /// <summary>The hideout's green 115 rock (BO3's Origins artifact piece), or null.</summary>
+        /// <summary>The hideout's green 115 rock (the original's Origins artifact piece), or null.</summary>
         public static GameObject GreenRock => _greenRock != null ? _greenRock : Preloading ? null : _greenRock = Load<GameObject>("pap_green_rock");
 
         /// <summary>The song the hideout radio plays once the three green rocks are investigated, or null.</summary>
         public static AudioClip SongClip => Preloading ? null : Clip("pap_115_song");
 
-        /// <summary>BO3's sound for picking up a 115 rock, or null (before the bundle loads, or a bundle without it).</summary>
+        /// <summary>the original's sound for picking up a 115 rock, or null (before the bundle loads, or a bundle without it).</summary>
         public static AudioClip RockPickupClip => Preloading ? null : Clip("pap_rock_pickup");
 
         /// <summary>The machine's start-up sound, or null before the bundle is loaded.</summary>
         public static AudioClip PowerOnClip => Preloading ? null : Clip("pap_power_on");
 
-        /// <summary>Origins' own start-up (zm_tomb's tomb_pap_07); the BO3 one isn't played on that machine.</summary>
+        /// <summary>Origins' own start-up (zm_tomb's tomb_pap_07); the the original one isn't played on that machine.</summary>
         public static AudioClip OriginsPowerOnClip => Preloading ? null : Clip("pap_origins_power_on");
 
         public static void Unload()

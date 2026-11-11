@@ -20,9 +20,9 @@ using Random = UnityEngine.Random;
 namespace PaPHideoutModule
 {
     /// <summary>
-    /// BO3 Pack-a-Punch machine in the Hideout, as its own hideout area. Until the area is built the machine sits
+    /// The original Pack-a-Punch machine in the Hideout, as its own hideout area. Until the area is built the machine sits
     /// dead under a tarp; once built it runs while the hideout has power. Look at it with a weapon in your hands and
-    /// press the interact key: the server takes the fee, the BO3 use sequence plays, and the weapon becomes
+    /// press the interact key: the server takes the fee, the the original use sequence plays, and the weapon becomes
     /// "115 Infused". Weapons in the hideout come from Hideout Uncensored.
     /// </summary>
     [BepInPlugin(PluginGuid, PluginName, PluginVersion)]
@@ -31,8 +31,8 @@ namespace PaPHideoutModule
     public class PaPHideoutModulePlugin : BaseUnityPlugin
     {
         public const string PluginGuid = "com.kennerz.paphideoutmodule";
-        public const string PluginName = "Kennerz-PaPHideoutModule"; // Forge rule: "Username-ModName"
-        public const string PluginVersion = "2.1.1";
+        public const string PluginName = "Kenner-PaPHideoutModule"; // Forge rule: "Username-ModName"
+        public const string PluginVersion = "2.2.0";
 
         private const string InstanceName = "PaP_Machine (PaPHideoutModule)";
         // Looks and sound only (F12): no weapon bonuses, so it costs (and adds to a gun's price) far less
@@ -62,6 +62,8 @@ namespace PaPHideoutModule
         internal const bool Tracers = true;
         internal static readonly Color TracerColor = new Color(1f, 0.1f, 0.55f, 1f);
         internal const bool RedMuzzleFlash = true;
+        // Bullet impacts (dust, chips, smoke, the flash) in the tracer colour, plus 115 sparks; not on people
+        internal const bool ImpactTint = true;
         internal static readonly Color MuzzleFlashColor = new Color(1f, 0.08f, 0.08f, 1f);
         internal const string NameSuffix = "(115 Infused)";
         internal const string ShortNameSuffix = "115";
@@ -179,10 +181,13 @@ namespace PaPHideoutModule
 
         private void Awake()
         {
+            // Release builds: F12 shows players only their own settings
+            ReleaseMenu.Install(this, d => d.Section != "4. Debug");
             Log = Logger;
             _instanceRef = this;
             PaPAssets.BundlePath = Path.Combine(Path.GetDirectoryName(Info.Location), PaPAssets.BundleFileName);
             BindConfig();
+            PaPNormalGame.Enable(Config, gameObject);
             PaPCamo.HookRendering();
 
             var harmony = new Harmony(PluginGuid);
@@ -196,21 +201,21 @@ namespace PaPHideoutModule
         private void BindConfig()
         {
             const string audio = "1. Volume";
-            _ambientVolume = Config.Bind(audio, "Machine hum", 0.1f, Volume("The running machine's hum while idle."));
+            _ambientVolume = Config.Bind(audio, "Machine hum", 0.105f, Volume("The running machine's hum while idle."));
             _workingVolume = Config.Bind(audio, "Machine working hum", 0.15f, Volume("The hum while a gun is being upgraded."));
             _jingleVolume = Config.Bind(audio, "Jingle", 0.2f, Volume("The Pack-a-Punch jingle the machine plays now and then."));
             _stingVolume = Config.Bind(audio, "Sting", 0.2f, Volume("The sting when a gun goes into the machine."));
             _crunchVolume = Config.Bind(audio, "Crunch", 0.2f, Volume("The crunch when a gun goes into the machine."));
             _powerOnVolume = Config.Bind(audio, "Power-on", 0.25f, Volume("The machine's start-up when you turn it on."));
-            _denyVolume = Config.Bind(audio, "Deny", 0.5f, Volume("BO3's buzz when the machine refuses (not enough money)."));
-            _acceptVolume = Config.Bind(audio, "Purchase", 0.5f, Volume("BO3's \"cha-ching\" when an upgrade is paid for."));
+            _denyVolume = Config.Bind(audio, "Deny", 0.5f, Volume("The buzz when the machine refuses (not enough money)."));
+            _acceptVolume = Config.Bind(audio, "Purchase", 0.5f, Volume("The \"cha-ching\" when an upgrade is paid for."));
             VoiceVolume = Config.Bind(audio, "Voice line", 1f, Volume("Your character's \"Good work\" as the gun goes in (on top of the game's own)."));
-            ShotSoundVolume = Config.Bind(audio, "Pack-a-Punch shot", 0.35f, Volume("The BO3 Pack-a-Punch layer on shots from 115 Infused guns."));
-            _originsPapping = Config.Bind(audio, "Origins machine: upgrading", 0.5f, Volume("The Origins machine's sound while a gun goes through it."));
-            _originsAmbient = Config.Bind(audio, "Origins machine: idle hum", 0.35f, Volume("The Origins machine's crystal hum while it's on (louder while it works)."));
+            ShotSoundVolume = Config.Bind(audio, "Pack-a-Punch shot", 0.153f, Volume("The Pack-a-Punch layer on shots from 115 Infused guns."));
+            _originsPapping = Config.Bind(audio, "Origins machine: upgrading", 0.4f, Volume("The Origins machine's sound while a gun goes through it."));
+            _originsAmbient = Config.Bind(audio, "Origins machine: idle hum", 0.195f, Volume("The Origins machine's crystal hum while it's on (louder while it works)."));
             _originsPowerOn = Config.Bind(audio, "Origins machine: power-on", 0.5f, Volume("The Origins machine's start-up when you turn it on."));
-            TailVolume = Config.Bind(audio, "Pack-a-Punch shot tail", 0.8f, Volume("The tail that rings after each Pack-a-Punch shot (louder on pistols, shotguns and other slow guns)."));
-            EnemyShotVolume = Config.Bind(audio, "Pack-a-Punch shot (enemies)", 1f, Volume("How loud the Pack-a-Punch shot is on enemies' 115 guns, compared with yours."));
+            TailVolume = Config.Bind(audio, "Pack-a-Punch shot tail", 1f, new ConfigDescription("The tail that rings after each Pack-a-Punch shot (louder on pistols, shotguns and other slow guns). Above 1 makes it louder than the mod's own level (quiet on some guns).", new AcceptableValueRange<float>(0f, 3f)));
+            EnemyShotVolume = Config.Bind(audio, "Pack-a-Punch shot (enemies)", 0.15f, Volume("How loud the Pack-a-Punch shot is on enemies' 115 guns, compared with yours."));
             RockHumVolume = Config.Bind(audio, "Factory 115 rock hum", 0.05f, Volume("The hum of the 115 fragments on Factory."));
             HideoutRockHumVolume = Config.Bind(audio, "Hideout green rock hum", 0.25f, Volume("The hum of the green 115 rocks hidden in the hideout."));
             RockPickupVolume = Config.Bind(audio, "115 rock pickup", 0.1f, Volume("The sound of picking up (Factory) or investigating (hideout) a 115 rock."));
@@ -222,14 +227,14 @@ namespace PaPHideoutModule
                 "The machine then costs 5,000 roubles, and an infused gun sells for 5,000 more instead of 500,000.");
             EnemyPaP = Config.Bind(gameplay, "Enemies can carry a 115 gun", true,
                 "Very rarely, an enemy (scav, PMC, raider, boss, goon...) spawns with a Pack-a-Punched gun. Kill them and bring it home and it stays 115 Infused.");
-            // An ode: BO1's Pack-a-Punched M1911 was Mustang & Sally, a pair; Tarkov only gets the one
+            // An ode: the original's Pack-a-Punched M1911 was Mustang & Sally, a pair; Tarkov only gets the one
             MustangAndSally = Config.Bind(gameplay, "Sally no Mustang (CHEAT)", false,
                 "CHEAT. Turns projectiles into grenades, like good old times. A Pack-a-Punched M1911A1 still loads .45 ACP, but every shot " +
                 "leaves the barrel as a 40mm M381 HE grenade: it arcs like one and explodes on impact. Mind the blast up close.");
 
             const string machine = "3. Machine";
             _machineModel = Config.Bind(machine, "Machine model", MachineModel.Default,
-                "Default (Black Ops 3's Pack-a-Punch) or the stone machine from Origins. The Origins one plays only its own sounds " +
+                "Default (the classic Pack-a-Punch) or the stone machine from Origins. The Origins one plays only its own sounds " +
                 "(no jingle or hum).");
 
             const string debug = "4. Debug";
@@ -350,7 +355,8 @@ namespace PaPHideoutModule
             }
 
             // Cheap per-frame check: the owner is handed to us by the HideoutPlayerOwner.Init patch, no scene scans
-            bool inHideout = InHideout;
+            // Zombies only (the server's InNormalGame off): no machine in the hideout; and none until the server has said
+            bool inHideout = InHideout && PaPRegistry.Loaded && PaPRegistry.InNormalGame;
             if (inHideout && _instance == null && !_loading)
                 StartCoroutine(SpawnRoutine());
             else if (!inHideout && _instance != null)
@@ -384,7 +390,7 @@ namespace PaPHideoutModule
             if (_instance == null || (_spinSpeed == 0f && _spinTarget == 0f) || !MachineVisible())
                 return;
 
-            // Runs after the Animator has posed the bones, so the spin layers on top of the BO3 anims
+            // Runs after the Animator has posed the bones, so the spin layers on top of the the original anims
             _spinSpeed = Mathf.MoveTowards(_spinSpeed, _spinTarget, 720f * Time.deltaTime);
             _spinAngle = Mathf.Repeat(_spinAngle + _spinSpeed * Time.deltaTime, 360f);
             for (int i = 0; i < _rollers.Length; i++)
@@ -780,7 +786,7 @@ namespace PaPHideoutModule
                 PaPRegistry.Refresh();
                 if (PaPRegistry.IsInfused(weaponId))
                 {
-                    // Paid: BO's cha-ching, then the machine takes the gun
+                    // Paid: the original's cha-ching, then the machine takes the gun
                     if (_accept != null && _accept.clip != null)
                         _accept.Play();
                     // A server mod that changed the gun (PaPServerApi) had the reply replace the profile's item with a
@@ -859,7 +865,7 @@ namespace PaPHideoutModule
                 GameObject prefab = UsingOrigins ? PaPAssets.OriginsPrefab : PaPAssets.MachinePrefab;
                 if (prefab == null && UsingOrigins)
                 {
-                    Log.LogWarning("The bundle has no Origins machine; using the Black Ops 3 one.");
+                    Log.LogWarning("The bundle has no Origins machine; using the default one.");
                     prefab = PaPAssets.MachinePrefab;
                 }
                 if (prefab != null && InHideout)
@@ -966,7 +972,7 @@ namespace PaPHideoutModule
                 smr.updateWhenOffscreen = false;
 
             Transform[] all = _instance.GetComponentsInChildren<Transform>(true);
-            // BO3: two roller groups. Origins: six rollers, the first three turning one way and the last three the other
+            // The original: two roller groups. Origins: six rollers, the first three turning one way and the last three the other
             string[] rollerNames = _instance.GetComponentInChildren<Animator>()?.runtimeAnimatorController?.name == "pap_machine_origins"
                 ? new[] { "roller_01_jnt", "roller_02_jnt", "roller_03_jnt", "roller_04_jnt", "roller_05_jnt", "roller_06_jnt" }
                 : new[] { "j_rollers_large", "j_rollers_small" };
@@ -990,7 +996,7 @@ namespace PaPHideoutModule
             foreach (Light light in _lights)
             {
                 light.range *= SavedScale;
-                // The sign's bulb light: warm yellow, as the BO3 machine's (the bundle has it pinkish white)
+                // The sign's bulb light: warm yellow, as the the original machine's (the bundle has it pinkish white)
                 if (light.name == "SignLight")
                     light.color = SignLightColor;
             }
@@ -1117,7 +1123,7 @@ namespace PaPHideoutModule
                 source.minDistance = 1f;
                 source.maxDistance = MaxDistance;
                 source.dopplerLevel = 0f;
-                // The Origins machine has its own sliders (its clips are recorded quieter than BO3's)
+                // The Origins machine has its own sliders (its clips are recorded quieter than the original's)
                 source.volume = UsingOrigins && source == _sting ? _originsPapping.Value
                     : UsingOrigins && source == _powerOn ? _originsPowerOn.Value
                     : UsingOrigins && source == _processLoop ? _originsAmbient.Value * (_working ? 1.6f : 1f)
@@ -1218,7 +1224,7 @@ namespace PaPHideoutModule
         private static Vector3 GunGone => UsingOrigins ? new Vector3(0f, 3.35f, -0.2f) : new Vector3(0f, 2.2f, -0.7f);
 
         /// <summary>
-        /// The BO3 use sequence. weapon is the original (profile) weapon that was just infused, or null for the
+        /// The the original use sequence. weapon is the original (profile) weapon that was just infused, or null for the
         /// debug key. The gun leaves the player's hands, rides into the machine, vanishes, comes back out with the
         /// camo, and creeps back in; take it in time or (if enabled) the machine keeps it.
         /// </summary>
@@ -1254,7 +1260,7 @@ namespace PaPHideoutModule
             }
             _signatureBefore = 0;
 
-            // While the sting plays and the gun goes in: a gesture and a voice line (BO3's knuckle crack)
+            // While the sting plays and the gun goes in: a gesture and a voice line (the original's knuckle crack)
             PaPGestures.Play(owner);
 
             if (weapon != null)
@@ -1518,10 +1524,30 @@ namespace PaPHideoutModule
             if (player == null || player.HandsController?.Item is not Weapon weapon)
                 return;
             GameObject model = player.HandsController.ControllerGameObject;
-            if (model == null || (!PaPRegistry.IsInfused(weapon.Id) && !PaPCamo.IsPainted(model)))
+            if (model == null)
                 return;
+            string id = weapon.Id.ToString();
+            if (!PaPRegistry.IsInfused(id))
+            {
+                // A plain gun only needs one look per draw (a pooled model may still wear an old camo); checking its
+                // renderers every 2 s made garbage the whole raid
+                if (model == _plainHandsModel && id == _plainHandsId)
+                    return;
+                _plainHandsModel = model;
+                _plainHandsId = id;
+                if (!PaPCamo.IsPainted(model))
+                    return;
+            }
+            else
+            {
+                _plainHandsModel = null;
+                _plainHandsId = null;
+            }
             PaPCamo.Apply(model, weapon);
         }
+
+        private static GameObject _plainHandsModel;
+        private static string _plainHandsId;
 
         private void OnDestroy()
         {

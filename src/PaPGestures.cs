@@ -6,7 +6,7 @@ using Object = UnityEngine.Object;
 namespace PaPHideoutModule
 {
     /// <summary>
-    /// In place of BO3's knuckle crack: the "All right" gesture with its "Good work" voice line, through the same method
+    /// In place of the original's knuckle crack: the "All right" gesture with its "Good work" voice line, through the same method
     /// as the gesture wheel and the quick phrase key. Gestures are arm animations, so they only show while the arms are
     /// out (weapons mode). The game's voice is quiet under the machine's sting, so the same line is layered on top, in
     /// step with it (about three times as loud at full "Voice line" volume).

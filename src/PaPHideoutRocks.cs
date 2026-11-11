@@ -10,9 +10,9 @@ using Object = UnityEngine.Object;
 namespace PaPHideoutModule
 {
     /// <summary>
-    /// Three green 115 rocks hidden around the hideout (BO3's Origins artifact piece). They glow and hum like the
+    /// Three green 115 rocks hidden around the hideout (the original's Origins artifact piece). They glow and hum like the
     /// Factory fragments, only quieter. Look at one and pick "Investigate": the pickup sound plays, the rock stays and
-    /// falls silent. When all three are investigated, the hideout radio plays BO3's "115" until the song ends, then the
+    /// falls silent. When all three are investigated, the hideout radio plays the original's "115" until the song ends, then the
     /// hideout's own music comes back. Progress lasts the game session across hideout visits; a raid or a restart
     /// starts it over. The rocks sit at fixed spots (<see cref="Spots"/>).
     /// </summary>
@@ -172,7 +172,7 @@ namespace PaPHideoutModule
 
         /// <summary>
         /// Every music player in the hideout (the radio, the TV, the gym's speakers: the ambiance objects with a track
-        /// list) goes quiet, and BO3's "115" plays from each of them at once, started on the same audio-clock tick so
+        /// list) goes quiet, and the original's "115" plays from each of them at once, started on the same audio-clock tick so
         /// they're in step. Each copy takes its player's 3D settings and mixer channel, so it sounds like that speaker
         /// and the game's music volume still applies. When the song ends, the players carry on as they were.
         /// </summary>

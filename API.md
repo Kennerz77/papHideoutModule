@@ -151,6 +151,7 @@ To infuse a gun yourself (a quest reward, a trader item), inject `PaPService` an
 | `KeepMaterialsPlain(word, words...)` | Default camo: which of your materials stay plain |
 | `SetOriginsLook(word, crystal)` / `SetOriginsPartLook(word, crystal)` | Origins: crystal or plating, by material / renderer name |
 | `KeepOriginsPlain(word)`, `PaintCutoutOnOrigins(word)`, `SplitOnRed(word)` | Origins: skip, paint alpha-tested, split red from the rest |
+| `SetCamoTiling(word, scale)` | Camo drawn at another size on materials with this word in their name (2 = twice as small); for texture layouts that stretch it. PaP 2.1.2+ |
 | `ApplyCamo(model, item)` | Paint (or clear) the camo on a model you built |
 | `IsInfused(item or id)`, `IsOriginsGun(item)`, `InfusedIds`, `OriginalId(id)` | Upgrade state |
 | `WeaponUpgraded`, `InfusedChanged` | Events (main thread; a failing listener is logged, not thrown) |

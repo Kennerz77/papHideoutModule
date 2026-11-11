@@ -13,7 +13,7 @@ public static class PaPTarpBaker
     private const string Dir = "Assets/PaP/Tarp";
     private const int ProbeLayer = 31;
     private const int N = 120;              // particles per side (the sheet is large: keeps the folds fine)
-    private const float Thickness = 0.09f;  // metres at true BO3 scale (the prefab is scaled down in game); thick enough that the sign's rim stays under it
+    private const float Thickness = 0.09f;  // metres at true the original scale (the prefab is scaled down in game); thick enough that the sign's rim stays under it
     private const int Steps = 1200;
     private const int Iterations = 10;
     private const float Dt = 1f / 90f;

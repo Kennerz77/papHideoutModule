@@ -24,12 +24,13 @@ namespace PaPHideoutModule
 {
     /// <summary>
     /// Game hooks for 115 Infused weapons: name suffix, stats (fire rate, recoil), damage per bullet fired from them,
-    /// BO1 camo on their models and the blue glow on their inventory cells.
+    /// The original camo on their models and the blue glow on their inventory cells.
     /// </summary>
     internal static class PaPPatches
     {
         public static void Apply(Harmony harmony)
         {
+            PaPImpacts.Enable(harmony);
             Patch(harmony, AccessTools.Method(typeof(LocalizationExtensions), nameof(LocalizationExtensions.LocalizedName), new[] { typeof(Item) }), nameof(NamePostfix));
             Patch(harmony, AccessTools.Method(typeof(LocalizationExtensions), nameof(LocalizationExtensions.LocalizedShortName), new[] { typeof(Item) }), nameof(ShortNamePostfix));
 
@@ -64,7 +65,7 @@ namespace PaPHideoutModule
             Patch(harmony, AccessTools.Method(typeof(GridItemView), nameof(GridItemView.UpdateInfo)), nameof(GridViewInfoPostfix));
             // Now and then an enemy spawns carrying a 115 gun (F12 toggle)
             Patch(harmony, AccessTools.Method(typeof(GameWorld), nameof(GameWorld.RegisterPlayer)), nameof(RegisterPlayerPostfix));
-            // A 115 rock picked up off the ground: its BO3 pickup sound where it lay
+            // A 115 rock picked up off the ground: its the original pickup sound where it lay
             Prefix(harmony, AccessTools.Method(typeof(EFT.Interactive.LootItem), nameof(EFT.Interactive.LootItem.RemoveLootItem)), nameof(RockPickupPrefix));
 
             Patch(harmony, AccessTools.FirstMethod(typeof(ObjectsFactory), m =>
@@ -94,6 +95,9 @@ namespace PaPHideoutModule
             // hideout sets its areas up
             Prefix(harmony, AccessTools.PropertyGetter(typeof(HideoutAreasInfo), nameof(HideoutAreasInfo.Templates)), nameof(AreaTemplatesPrefix));
             Prefix(harmony, AccessTools.Method(typeof(HideoutController), nameof(HideoutController.HideoutAwake)), nameof(HideoutAwakePrefix));
+            // A player who chose Pack-a-Punch for the zombies mode only: the server's area data reaches the template
+            // here, and is switched off for them (the area isn't shown, as if the mod weren't there)
+            Patch(harmony, AccessTools.Method(typeof(AreaTemplate), nameof(AreaTemplate.UpdateData)), nameof(AreaDataPostfix));
             // Walking up to the machine must not offer the area's "go to module" prompt: it clashes with the machine's
             // own menu (a gun inside the machine would be left behind). The bird's-eye view's area icon stays
             Prefix(harmony, AccessTools.Method(typeof(HideoutPlayerOwner), nameof(HideoutPlayerOwner.HideoutAreaInteraction)), nameof(AreaInteractionPrefix));
@@ -139,7 +143,51 @@ namespace PaPHideoutModule
 
         // The cell for a part taken off a gun is built (and its picture asked for) while the part still sits on the
         // gun, so it came out in camo and nothing asked again; re-check once the move is done
-        private static void ItemMovedPostfix() => PaPHideoutModulePlugin.MarkItemsMoved();
+        // In a raid every inventory raises these (bots reloading, looting, mag swaps), and the refresh repaints every
+        // tracked model: that was a hitch every few seconds in fights. In a raid only the player's own moves that touch
+        // a 115 gun (the gun itself, a part going on or off it) or a fragment count now
+        private static void ItemMovedPostfix(ItemController __instance, ItemEventArgs __0)
+        {
+            try
+            {
+                if (Singleton<AbstractGame>.Instance?.InRaid != true)
+                {
+                    PaPHideoutModulePlugin.MarkItemsMoved();
+                    return;
+                }
+                if (__0 == null || __0.Status != CommandStatus.Succeed || !PaPRegistry.AnyInfused)
+                    return;
+                // Reloads (mags in and out, rounds into mags): the held gun is repainted by KeepRaidHandsPainted anyway
+                if (__0.Item is Magazine || __0.Item is Ammo)
+                    return;
+                Player player = Singleton<GameWorld>.Instance?.MainPlayer;
+                if (player == null || !ReferenceEquals(__instance, player.InventoryController))
+                    return;
+                if (TouchesInfused(__0.Item) || TouchesInfused(__0.Location?.Container?.ParentItem))
+                    PaPHideoutModulePlugin.MarkItemsMoved();
+            }
+            catch
+            {
+                // Never break EFT's own item event
+            }
+        }
+
+        /// <summary>The item, anything inside it, or anything it sits on is a 115 gun or a fragment.</summary>
+        private static bool TouchesInfused(Item item)
+        {
+            if (item == null)
+                return false;
+            foreach (Item inside in item.GetAllItems())
+                if (Matters(inside))
+                    return true;
+            foreach (Item parent in item.GetAllParentItems())
+                if (Matters(parent))
+                    return true;
+            return false;
+        }
+
+        private static bool Matters(Item item) =>
+            item != null && ((item is Weapon && PaPRegistry.IsInfused(item.Id.ToString())) || PaPFragments.Is(item));
 
         /// <summary>What an infused gun adds to its trader price, in roubles: the machine's fee.</summary>
         // Looks-only Pack-a-Punch costs (and adds) far less
@@ -259,6 +307,12 @@ namespace PaPHideoutModule
                     string text = label.text?.Trim();
                     if (text == plain || text == brief)
                         label.text = full;
+                    // A gun built exactly like one of EFT's presets is named after the preset (e.g. "T.O 2K24"), not
+                    // after its template: its title is "<preset> 115", given the full suffix the same way
+                    else if (!UpgradedName(item, out _) && text != null && text.Length > 4
+                             && text.EndsWith(" " + PaPHideoutModulePlugin.ShortNameSuffix) && text.Any(char.IsLetter)
+                             && !text.Contains(PaPHideoutModulePlugin.NameSuffix))
+                        label.text = text.Substring(0, text.Length - PaPHideoutModulePlugin.ShortNameSuffix.Length) + PaPHideoutModulePlugin.NameSuffix;
                 }
             }
             catch (Exception e)
@@ -383,6 +437,23 @@ namespace PaPHideoutModule
 
         private static bool AreaInteractionPrefix(HideoutArea area, bool inSight) =>
             !(inSight && area != null && area.AreaTemplate != null && area.AreaTemplate.Type == PaPArea.Type);
+
+        private static void AreaDataPostfix(AreaTemplate __instance)
+        {
+            try
+            {
+                if (__instance == null || __instance.Type != PaPArea.Type)
+                    return;
+                if (!PaPRegistry.Loaded)
+                    PaPRegistry.Refresh(); // once, before the hideout first shows (the answer decides the area)
+                if (PaPRegistry.Loaded && !PaPRegistry.InNormalGame)
+                    __instance.Enabled = false;
+            }
+            catch (Exception e)
+            {
+                PaPHideoutModulePlugin.Log.LogError($"PaP area (normal gameplay choice) failed: {e.Message}");
+            }
+        }
 
         private static void AreaTemplatesPrefix(HideoutAreasInfo __instance)
         {
@@ -739,7 +810,7 @@ namespace PaPHideoutModule
 
         // Bumped to retire cached pictures: "PaP8" the washed-out rocks of older builds; "PaP9"/"PLN4" (1.1.0) guns and
         // parts photographed with camo stuck on (a part's own copy of a painted material, which 1.0.0 couldn't undo)
-        private const int IconSalt = 0x50615043; // bumped: the camo rules changed, so every picture is redone
+        private const int IconSalt = 0x50615044; // bumped: the camo rules changed (iron sights painted, 2026-11-07), so every picture is redone
         private const int PlainPartSalt = 0x504C4E34; // "PLN4"
 
         // Icons are cached by hash; anything that changes the camo on any part of the item must change the hash, or
@@ -804,7 +875,7 @@ namespace PaPHideoutModule
         {
             try
             {
-                if (!PaPHideoutModulePlugin.EnemyPaP.Value || !(iPlayer is Player player) || !player.IsAI
+                if (!PaPHideoutModulePlugin.EnemyPaP.Value || !PaPRegistry.InNormalGame || !(iPlayer is Player player) || !player.IsAI
                     || UnityEngine.Random.Range(0, EnemyPaPOdds) != 0)
                     return;
                 InventoryEquipment equipment = player.Profile?.Inventory?.Equipment;

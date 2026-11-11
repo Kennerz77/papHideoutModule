@@ -23,9 +23,9 @@ public record ModMetadata : IModMetadata
 {
     public string ModGuid { get; init; } = "com.kennerz.paphideoutmodule"; // same GUID as the client plugin (Forge rule)
     public string Name { get; init; } = "PaPHideoutModule"; // letters and numbers only (Forge rule)
-    public string Author { get; init; } = "Kennerz";
+    public string Author { get; init; } = "Kenner";
     public List<string>? Contributors { get; init; }
-    public SemanticVersioning.Version Version { get; init; } = new("2.1.1");
+    public SemanticVersioning.Version Version { get; init; } = new("2.2.0");
     public SemanticVersioning.Range SptVersion { get; init; } = new("~4.1.0");
     public List<string>? Incompatibilities { get; init; }
     /// <summary>Hideout Uncensored provides weapons in the hideout, which the machine needs (the client depends on it too).</summary>
@@ -33,7 +33,7 @@ public record ModMetadata : IModMetadata
     {
         ["com.trappuss.hideoutuncensored"] = new SemanticVersioning.Range(">=1.3.0"),
     };
-    public string? Url { get; init; }
+    public string? Url { get; init; } = "https://github.com/Kennerz77/papHideoutModule";
     public string License { get; init; } = "MIT";
     public bool HasPrepatcher { get; init; } = false;
 }
@@ -59,7 +59,8 @@ public record PaPItemRequest : BaseInteractionRequestData
 public record PaPState(
     [property: JsonPropertyName("infused")] List<string> Infused,
     [property: JsonPropertyName("fragmentScales")] Dictionary<string, float> FragmentScales,
-    [property: JsonPropertyName("moved")] List<string> Moved);
+    [property: JsonPropertyName("moved")] List<string> Moved,
+    [property: JsonPropertyName("inNormalGame")] bool InNormalGame);
 
 /// <summary>
 /// PaPUpgrade: charge the player and infuse the weapon. PaPStrip: remove its powers. PaPDestroy: the gun was left in
@@ -94,9 +95,12 @@ public class PaPStaticRouter(JsonUtil jsonUtil, PaPService service, PaPQuestServ
         {
             // Profiles made since the server started get the area here (the client asks at startup), and the
             // quest if they've opened the side room in a way the live hooks didn't see (it shows next login)
+            // The area entry always (the client switches the area off for a player who chose zombies only)
+            bool normal = PaPNormalGame.Now(sessionId.ToString());
             PaPService.EnsureArea(saveServer, sessionId);
-            PaPService.EnsureQuest(saveServer, questService, sessionId);
-            return ValueTask.FromResult(httpResponseUtil.NoBody(new PaPState(service.GetInfused(sessionId), PaPQuestService.FragmentScales(), service.GetMoved(sessionId))));
+            if (normal)
+                PaPService.EnsureQuest(saveServer, questService, sessionId);
+            return ValueTask.FromResult(httpResponseUtil.NoBody(new PaPState(service.GetInfused(sessionId), PaPQuestService.FragmentScales(), service.GetMoved(sessionId), normal)));
         }
     ),
     new RouteAction<EmptyRequestData>(

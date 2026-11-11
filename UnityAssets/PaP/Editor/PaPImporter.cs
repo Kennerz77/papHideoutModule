@@ -8,17 +8,18 @@ using UnityEngine;
 
 /// <summary>
 /// Builds Assets/PaP/pap_machine.prefab straight from Greyhound's SEModel/SEAnim exports (no Blender/FBX):
-/// skinned machine + "please wait" flag, Standard (Specular setup) materials, BO3 anim clips + controllers,
+/// skinned machine + "please wait" flag, Standard (Specular setup) materials, the original anim clips + controllers,
 /// colliders, sign glow and 3D audio.
 /// </summary>
 public static class PaPImporter
 {
-    private const string ExportRoot = @"E:\Greyhound boz\exported_files\black_ops_3";
-    private const string MachineDir = ExportRoot + @"\xmodels\p7_zm_vending_packapunch_on";
-    private const string MachineFile = MachineDir + @"\p7_zm_vending_packapunch_on_LOD0.semodel";
-    private const string FlagDir = ExportRoot + @"\xmodels\p7_zm_vending_packapunch_sign_wait";
-    private const string FlagFile = FlagDir + @"\p7_zm_vending_packapunch_sign_wait_LOD0.semodel";
-    private const string AnimDir = ExportRoot + @"\xanims";
+    // The asset export folder on the author's PC: the KZ_EXPORT_ROOT user environment variable (kept out of the source)
+    private static readonly string ExportRoot = System.Environment.GetEnvironmentVariable("KZ_EXPORT_ROOT", System.EnvironmentVariableTarget.User) ?? "";
+    private static readonly string MachineDir = ExportRoot + @"\xmodels\p7_zm_vending_packapunch_on";
+    private static readonly string MachineFile = MachineDir + @"\p7_zm_vending_packapunch_on_LOD0.semodel";
+    private static readonly string FlagDir = ExportRoot + @"\xmodels\p7_zm_vending_packapunch_sign_wait";
+    private static readonly string FlagFile = FlagDir + @"\p7_zm_vending_packapunch_sign_wait_LOD0.semodel";
+    private static readonly string AnimDir = ExportRoot + @"\xanims";
 
     private const string Root = "Assets/PaP";
     private const string GeneratedDir = Root + "/Generated";
@@ -30,12 +31,12 @@ public static class PaPImporter
 
     private const string SignMaterial = "mtl_p7_zm_vending_packapunch_sign";
 
-    // CoD units are inches
+    // The original game units are inches
     private const float Scale = 0.0254f;
     private const float LoopBlendFrames = 10f;
     private const float BodyHeadSplit = 3.6f;
 
-    // CoD is right-handed Z-up; Unity is left-handed Y-up. The machine's front (sign, rollers) is CoD -Y,
+    // The original game is right-handed Z-up; Unity is left-handed Y-up. The machine's front (sign, rollers) is the original game -Y,
     // mapped to Unity +Z. The mapping mirrors one axis (det -1), so quaternion xyz = -(M * xyz).
     private static Vector3 ToUnity(SEVec3 v) => new Vector3(-v.X, v.Z, -v.Y) * Scale;
     private static Vector3 ToUnityDir(SEVec3 v) => new Vector3(-v.X, v.Z, -v.Y);
@@ -49,7 +50,7 @@ public static class PaPImporter
     private const string CamoSpecSourcePath = Root + "/Camo/pap_camo_s.png";
     private const string CamoGlossPath = Root + "/Camo/pap_camo_g.png";
 
-    [MenuItem("PaP/1. Import BO3 Pack-a-Punch")]
+    [MenuItem("PaP/1. Import Pack-a-Punch")]
     public static void ImportAll()
     {
         foreach (string dir in new[] { GeneratedDir, TextureDir, MaterialDir })
@@ -76,7 +77,7 @@ public static class PaPImporter
             });
             AddAnimator(root, machineController);
 
-            // "Please wait" flag: the BO3 flag anims key its tag_origin at a fixed spot on the machine
+            // "Please wait" flag: the the original flag anims key its tag_origin at a fixed spot on the machine
             SEModel flag = SEModel.Load(FlagFile);
             SEAnim flagUp = SEAnim.Load(Path.Combine(AnimDir, "o_zombie_base_packapunch_flag_up.seanim"));
             SEAnimBone flagOrigin = flagUp.Bones.First(b => b.Name == "tag_origin");
@@ -123,7 +124,7 @@ public static class PaPImporter
 
     /// <summary>
     /// Builds Assets/PaP/pap_machine_origins.prefab: the Origins stone machine on the same state names, rollers and
-    /// audio objects as the BO3 one, so the plugin drives both alike. Its sounds are Origins' own (tomb_pap_*).
+    /// audio objects as the the original one, so the plugin drives both alike. Its sounds are Origins' own (tomb_pap_*).
     /// </summary>
     [MenuItem("PaP/1b. Import Origins Pack-a-Punch")]
     public static void ImportOrigins()
@@ -419,7 +420,7 @@ public static class PaPImporter
         go.transform.localPosition = center + new Vector3(0f, 0f, 0.6f);
         var light = go.AddComponent<Light>();
         light.type = LightType.Point;
-        light.color = new Color(1f, 0.8f, 0.42f); // warm yellow like the BO3 machine (the plugin sets it too)
+        light.color = new Color(1f, 0.8f, 0.42f); // warm yellow like the the original machine (the plugin sets it too)
         light.intensity = 0.8f;
         light.range = 4f; // plugin multiplies by the machine's scale
         light.shadows = LightShadows.None;
@@ -488,7 +489,7 @@ public static class PaPImporter
         if (se.Name == SignMaterial && albedo != null)
         {
             mat.SetTexture("_EmissionMap", albedo);
-            mat.SetColor("_EmissionColor", new Color(0.55f, 0.52f, 0.52f)); // dimmer than the BO3 sign: Tarkov's hideout is dark and it bloomed to white
+            mat.SetColor("_EmissionColor", new Color(0.55f, 0.52f, 0.52f)); // dimmer than the the original sign: Tarkov's hideout is dark and it bloomed to white
             mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             mat.EnableKeyword("_EMISSION");
         }
@@ -570,7 +571,7 @@ public static class PaPImporter
     private static AnimatorController BuildController(string name, SEModel model, Transform[] bones, Transform root,
         (string state, string anim, ClipMode mode)[] states, string animDir = AnimDir, string clipPrefix = "")
     {
-        // tag_origin carries delta root motion / placement in BO3 anims; the object itself must stay put
+        // tag_origin carries delta root motion / placement in the original anims; the object itself must stay put
         Transform[] animated = bones.Where(b => b.name != "tag_origin").ToArray();
 
         string controllerPath = $"{Root}/{name}.controller";
@@ -627,7 +628,7 @@ public static class PaPImporter
             if (posKeys[posKeys.Count - 1].t < length) posKeys.Add((length, posKeys[posKeys.Count - 1].v));
             if (rotKeys[rotKeys.Count - 1].t < length) rotKeys.Add((length, rotKeys[rotKeys.Count - 1].v));
 
-            // BO3 loops sit between take/eject anims and don't end where they start; blend back so the loop is seamless
+            // The original loops sit between take/eject anims and don't end where they start; blend back so the loop is seamless
             if (mode == ClipMode.Loop)
             {
                 float wrapEnd = length + LoopBlendFrames / fps;
@@ -670,7 +671,7 @@ public static class PaPImporter
     // ---------- Weapon camo ----------
 
     /// <summary>
-    /// The BO1 PaP colour map is near-black; its red circuit pattern lives in the specular map (built separately, see
+    /// The the original PaP colour map is near-black; its red circuit pattern lives in the specular map (built separately, see
     /// BuildCamoSpec). A faint trace of the circuitry goes onto the colour map too, so it still reads in dim light.
     /// </summary>
     private static void BuildCamoAlbedo()
@@ -724,8 +725,8 @@ public static class PaPImporter
     }
 
     /// <summary>
-    /// BO1's own specular map (the shiny red-copper traces and grey glints) with its gloss map in the alpha: the gun's
-    /// spec map on the default camo, so the circuitry shows in the highlights and reflections the way BO1's does.
+    /// The original's own specular map (the shiny red-copper traces and grey glints) with its gloss map in the alpha: the gun's
+    /// spec map on the default camo, so the circuitry shows in the highlights and reflections the way the original's does.
     /// </summary>
     private static void BuildCamoSpec(Texture2D spec)
     {
@@ -793,8 +794,8 @@ public static class PaPImporter
         return dst;
     }
 
-    // BO1's blue-black colour map with only faint dark-red traces: the circuitry mostly shows in the highlights
-    // (the spec map), as in BO1
+    // The original's blue-black colour map with only faint dark-red traces: the circuitry mostly shows in the highlights
+    // (the spec map), as in the original
     private const int CamoSize = 2048;
     private const float BaseDarken = 0.8f;
     private const float TraceSoften = 1.4f, TraceCut = 0.6f;

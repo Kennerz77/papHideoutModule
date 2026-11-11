@@ -25,7 +25,7 @@ if (-not (Test-Path (Join-Path $project 'Assets'))) {
 Write-Host 'Syncing UnityAssets -> project Assets...'
 Copy-Item (Join-Path $here 'UnityAssets\PaP') (Join-Path $project 'Assets') -Recurse -Force
 
-Write-Host 'Importing BO3 assets and building bundle...'
+Write-Host 'Importing the original assets and building bundle...'
 Invoke-Unity @('-batchmode', '-quit', '-projectPath', "`"$project`"", '-executeMethod', 'PaPBundleTools.RunAllBatch') 'build_bundle.log'
 
 Select-String -Path (Join-Path $logDir 'build_bundle.log') -Pattern '\[PaP\]' | ForEach-Object { $_.Line }
