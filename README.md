@@ -2,7 +2,7 @@
 
 The classic zombies **Pack-a-Punch** machine, in your SPT hideout. Do Mechanic's quest, build the machine, feed it a gun and roubles, and take it back **115 Infused**. It hits harder, fires faster and kicks less, with the Pack-a-Punch camo, fire sound, tracers and red muzzle smoke.
 
-Version 2.2.0, for **SPT 4.1.6**. Made by **Kenner**.
+Version 2.2.1, for **SPT 4.1.6**. Made by **Kenner**.
 
 **Dr K's SPZombies:** this mod is part of Kenner's zombies mode for SPT (round-based classic-style zombies, solo or co-op with Fika). On its own it works exactly as before.
 
@@ -112,6 +112,7 @@ This is a free, non-commercial fan mod. All third-party assets belong to their r
 
 ## Changelog
 
+- **2.2.1:** support for the new wonder weapons (Ray Gun Mark II, Wunderwaffe DG-2, MP40): guns can bring their own upgraded camo and fire sound, and set the Origins camo size and glow per gun. Upgraded guns are framed properly in the item window. New calls for gun makers in API.md.
 - **2.2.0:** a one-time choice to show the mod's hideout features in normal SPT play or keep them for the zombies mode only; Pack-a-Punched shots hit with their own impacts; the camo can be drawn at its own size per gun (the Thundergun's is finer now); the F12 menu is trimmed to the volumes and the gameplay options; part of Dr K's SPZombies. The 115 rocks now show on Factory with Fika too, also on a Fika headless.
 
 - **2.1.1:** Fixed: Mustang & Sally grenades have their wider blast again (it was switched off on this game version).

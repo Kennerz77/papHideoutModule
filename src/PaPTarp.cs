@@ -283,7 +283,7 @@ namespace PaPHideoutModule
             return moved;
         }
 
-        // Tarkov's tarp textures cover a couple of metres; the baked sheet's UVs are in the original metres (machine scale 1)
+        // The game's tarp textures cover a couple of metres; the baked sheet's UVs are in the original metres (machine scale 1)
         private const float TarpTextureMetres = 2.5f;
 
         /// <summary>The baked cloth dressed in one of the hideout's own tarps (if the scene has one) instead of the bake's canvas.</summary>
@@ -298,7 +298,7 @@ namespace PaPHideoutModule
             mesh.name = "pap_tarp (scene look)";
             float uvScale = machine.lossyScale.x / TarpTextureMetres;
             mesh.uv = mesh.uv.Select(uv => uv * uvScale).ToArray();
-            mesh.RecalculateTangents(); // Tarkov's tarp shader is normal-mapped
+            mesh.RecalculateTangents(); // The game's tarp shader is normal-mapped
             filter.sharedMesh = mesh;
             renderer.sharedMaterial = scene;
         }

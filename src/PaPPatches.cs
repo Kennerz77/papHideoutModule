@@ -841,7 +841,7 @@ namespace PaPHideoutModule
                 // saved to its disk cache under older PaP versions. Before the camo texture is loaded the plain hash is
                 // kept, so a picture taken then is never cached as the camo one
                 if (PaPCamo.OnInfusedGun(item) && PaPAssets.CamoReady)
-                    __result = __result * 31 + 115115 + IconSalt + (PaPCamo.OnOriginsGun(item) ? 0x0B15 : 0);
+                    __result = __result * 31 + 115115 + IconSalt + (PaPCamo.OnOriginsGun(item) ? 0x0B15 : 7919 * (int)PaPAssets.Look);
                 // Parts, mags and the like off a gun: older builds could photograph them still wearing the camo of the
                 // gun they came from and cache that as their plain picture (also on disk, and in trader screens); a
                 // plain salt retires those once

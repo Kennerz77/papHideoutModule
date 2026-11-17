@@ -88,10 +88,58 @@ namespace PaPHideoutModule
         public static GameObject OriginsPrefab => _originsPrefab != null ? _originsPrefab : _originsPrefab = Load<GameObject>(OriginsPrefabName);
 
         /// <summary>the original's spec map (red-copper traces, gloss in alpha): the default camo's highlights, or null.</summary>
-        public static Texture2D CamoSpec => Preloading ? null : _camoSpec != null ? _camoSpec : _camoSpec = Load<Texture2D>("pap_camo_spec");
+        public static Texture2D CamoSpec => Preloading ? null : _camoSpec != null ? _camoSpec : _camoSpec = LookSpec();
         private static Texture2D _camoSpec;
 
-        public static Texture2D CamoAlbedo => _camo != null ? _camo : Preloading ? null : _camo = Load<Texture2D>(CamoName);
+        public static Texture2D CamoAlbedo => _camo != null ? _camo : Preloading ? null : _camo = LookAlbedo();
+
+        /// <summary>The default machine's camo look: always Classic now (the Chronicles choice was taken out, user 2026-11-16).</summary>
+        public static CamoLook Look => CamoLook.Classic;
+
+        // Each look's colour map, spec map and glow map in the bundle; a look missing from an older bundle falls back
+        // to the classic one
+        private static Texture2D LookAlbedo()
+        {
+            Texture2D tex = Look == CamoLook.Chronicles ? Load<Texture2D>("pap_camo_chronicles_c") : null;
+            return tex != null ? tex : Load<Texture2D>(CamoName);
+        }
+
+        private static Texture2D LookSpec()
+        {
+            Texture2D tex = Look == CamoLook.Chronicles ? Load<Texture2D>("pap_camo_chronicles_s") : null;
+            return tex != null ? tex : Load<Texture2D>("pap_camo_spec");
+        }
+
+        /// <summary>The default camo's self-glow map: the classic pattern itself, Chronicles' copper traces.</summary>
+        public static Texture2D CamoGlow
+        {
+            get
+            {
+                if (Preloading)
+                    return null;
+                Texture2D tex = Look == CamoLook.Chronicles ? Load<Texture2D>("pap_camo_chronicles_s") : null;
+                return tex != null ? tex : CamoAlbedo;
+            }
+        }
+
+        /// <summary>How strongly that glow shows (the classic look's faint 0.25).</summary>
+        public static float CamoGlowLevel => Look == CamoLook.Chronicles ? 0.15f : 0.25f;
+
+        /// <summary>
+        /// A mirror-bright look: Chronicles' copper circuit is very shiny and reflective in the original (user,
+        /// 2026-11-16), so its painted copies get strong, copper-tinted highlights and reflections.
+        /// </summary>
+        public static bool CamoShiny => Look == CamoLook.Chronicles;
+
+        /// <summary>The camo pattern's size on the gun, against the classic one (their textures repeat at different scales).</summary>
+        public static float CamoLookTiling => Look == CamoLook.Chronicles ? 2f : 1f;
+
+        /// <summary>A new look picked: the textures are looked up again.</summary>
+        public static void ResetCamoLook()
+        {
+            _camo = null;
+            _camoSpec = null;
+        }
 
         /// <summary>True once the camo can be painted; until then icons mustn't be cached as "camo" pictures.</summary>
         public static bool CamoReady => !Preloading && CamoAlbedo != null;

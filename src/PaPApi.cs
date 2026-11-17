@@ -46,6 +46,32 @@ namespace PaPHideoutModule
         public static void ExcludeFromCamo(string templateId) => PaPCamo.Exclude(templateId);
 
         /// <summary>
+        /// The weapon template's own default upgraded camo, in place of the chosen default look (a mod weapon with an
+        /// upgraded look of its own). <paramref name="albedo"/> the colour map, <paramref name="spec"/> its specular map (or
+        /// null), <paramref name="tiling"/> how often it repeats, <paramref name="glow"/> its faint self-glow. The Origins
+        /// machine's looks still apply as usual. Call once at start-up.
+        /// </summary>
+        public static void SetDefaultCamo(string templateId, Texture2D albedo, Texture2D spec = null, float tiling = 1f, float glow = 0.05f) =>
+            PaPCamo.SetCustom(templateId, new PaPCamo.CustomCamo { Tag = "own " + templateId, Albedo = albedo, Spec = spec, Tiling = tiling, Glow = glow });
+
+        /// <summary>
+        /// As above, worn only by materials whose name contains one of <paramref name="paintOnly"/> (the rest of the gun
+        /// keeps its own look under this camo; the Origins looks are unchanged).
+        /// </summary>
+        public static void SetDefaultCamo(string templateId, Texture2D albedo, Texture2D spec, float tiling, float glow, string[] paintOnly) =>
+            PaPCamo.SetCustom(templateId, new PaPCamo.CustomCamo { Tag = "own " + templateId, Albedo = albedo, Spec = spec, Tiling = tiling, Glow = glow, Only = paintOnly });
+
+        /// <summary>
+        /// As above, with a spec-gloss map (RGB the specular colour, A the gloss) and a normal map for materials on Unity's
+        /// Standard (Specular setup) shader: a metallic camo with depth (an engraving's relief).
+        /// </summary>
+        public static void SetDefaultCamo(string templateId, Texture2D albedo, Texture2D spec, float tiling, float glow, string[] paintOnly, Texture2D specGloss, Texture2D normal) =>
+            PaPCamo.SetCustom(templateId, new PaPCamo.CustomCamo
+            {
+                Tag = "own " + templateId, Albedo = albedo, Spec = spec, Tiling = tiling, Glow = glow, Only = paintOnly, SpecGloss = specGloss, Normal = normal,
+            });
+
+        /// <summary>
         /// Parts whose material name contains one of these words keep their own look on an infused gun (cables, boxes...).
         /// Every other material whose name contains <paramref name="metalLikeWord"/> is painted even if its name says
         /// wood or plastic (a mod gun's own parts are made of whatever it says; its camo rule is yours).
@@ -76,6 +102,15 @@ namespace PaPHideoutModule
         /// at startup, before anything is painted. (PaP 2.1.2+)
         /// </summary>
         public static void SetCamoTiling(string materialWord, float scale) => PaPCamo.SetTiling(materialWord, scale);
+
+        /// <summary>
+        /// As SetCamoTiling, with its own scale for the Origins looks (crystal and plating): e.g. the default camo drawn
+        /// small and the crystal's splotches big on the same gun. 2.2.1+.
+        /// </summary>
+        public static void SetCamoTiling(string materialWord, float scale, float originsScale) => PaPCamo.SetTiling(materialWord, scale, originsScale);
+
+        /// <summary>How strongly the Origins crystal glows on materials with this word (1 = as built, less = darker, bolder splotches). 2.2.1+.</summary>
+        public static void SetOriginsGlow(string materialWord, float scale) => PaPCamo.SetOriginsGlow(materialWord, scale);
 
         /// <summary>This weapon plays its own shot sound only: no Pack-a-Punch shot tail on top.</summary>
         public static void NoShotTail(string templateId) => PaPShotAudio.NoTail(templateId);

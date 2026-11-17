@@ -32,7 +32,7 @@ namespace PaPHideoutModule
     {
         public const string PluginGuid = "com.kennerz.paphideoutmodule";
         public const string PluginName = "Kenner-PaPHideoutModule"; // Forge rule: "Username-ModName"
-        public const string PluginVersion = "2.2.0";
+        public const string PluginVersion = "2.2.1";
 
         private const string InstanceName = "PaP_Machine (PaPHideoutModule)";
         // Looks and sound only (F12): no weapon bonuses, so it costs (and adds to a gun's price) far less
@@ -117,6 +117,10 @@ namespace PaPHideoutModule
 
         /// <summary>Which machine stands in the hideout (F12 > 3. Machine). Origins plays only its own sounds.</summary>
         internal enum MachineModel { Default, Origins }
+
+        /// <summary>The default machine's camo (F12 > Machine > Default machine camo).</summary>
+        // The camo choice was taken out (Classic only); kept null so the look reads Classic
+        internal static ConfigEntry<CamoLook> DefaultCamo = null;
 
         private static bool UsingOrigins => _machineModel != null && _machineModel.Value == MachineModel.Origins;
         private ConfigEntry<float> _ambientVolume;
@@ -227,12 +231,14 @@ namespace PaPHideoutModule
                 "The machine then costs 5,000 roubles, and an infused gun sells for 5,000 more instead of 500,000.");
             EnemyPaP = Config.Bind(gameplay, "Enemies can carry a 115 gun", true,
                 "Very rarely, an enemy (scav, PMC, raider, boss, goon...) spawns with a Pack-a-Punched gun. Kill them and bring it home and it stays 115 Infused.");
-            // An ode: the original's Pack-a-Punched M1911 was Mustang & Sally, a pair; Tarkov only gets the one
+            // An ode: the original's Pack-a-Punched M1911 was Mustang & Sally, a pair; here there is only the one
             MustangAndSally = Config.Bind(gameplay, "Sally no Mustang (CHEAT)", false,
                 "CHEAT. Turns projectiles into grenades, like good old times. A Pack-a-Punched M1911A1 still loads .45 ACP, but every shot " +
                 "leaves the barrel as a 40mm M381 HE grenade: it arcs like one and explodes on impact. Mind the blast up close.");
 
             const string machine = "3. Machine";
+            // No camo choice any more (user, 2026-11-16): every gun takes the Classic camo (or the Origins machine's look);
+            // the Chronicles-era engraving is the Wunderwaffe's own (its mod registers it through PaPApi.SetDefaultCamo)
             _machineModel = Config.Bind(machine, "Machine model", MachineModel.Default,
                 "Default (the classic Pack-a-Punch) or the stone machine from Origins. The Origins one plays only its own sounds " +
                 "(no jingle or hum).");
@@ -1556,4 +1562,8 @@ namespace PaPHideoutModule
             PaPAssets.Unload();
         }
     }
+
+    /// <summary>The default machine's camo looks.</summary>
+    // Shadows of Evil dropped (user, 2026-11-16): a saved setting naming it falls back to Classic
+    public enum CamoLook { Classic, Chronicles }
 }

@@ -99,6 +99,12 @@ public static class PaPBundleTools
                     "Assets/PaP/Camo/origins_crystal_n.png",
                     "Assets/PaP/Camo/origins_camo_e.png",
                     "Assets/PaP/Camo/origins_camo_c.png",
+                    // The other default-machine camos (F12 > Machine > Default machine camo): the Chronicles maps' HD
+                    // camo (colour + copper spec) and Shadows of Evil's (colour + glowing cracks)
+                    "Assets/PaP/Camo/pap_camo_chronicles_c.png",
+                    "Assets/PaP/Camo/pap_camo_chronicles_s.png",
+                    "Assets/PaP/Camo/pap_camo_zod_c.png",
+                    "Assets/PaP/Camo/pap_camo_zod_e.png",
                     "Assets/PaP/Audio/pap_rock_hum.wav",
                     // The hideout's green 115 rocks: the rock, its pickup sound, and the song the radio plays
                     PaPRockBuilder.GreenPrefabPath,

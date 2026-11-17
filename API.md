@@ -99,6 +99,9 @@ Steer it by **material name**. Any part of the name matches, and case doesn't ma
 ```csharp
 PaPApi.ExcludeFromCamo(myGun);                        // no camo at all: you handle the upgraded look
 
+// Its own upgraded camo instead of the default one, only on its "mygun_body" materials
+PaPApi.SetDefaultCamo(myGun, albedo, spec, 1f, 0.05f, new[] { "mygun_body" });
+
 // Default camo: paint every material with "mygun" in its name, except these
 PaPApi.KeepMaterialsPlain("mygun", "glass", "wires", "stock");
 
@@ -146,12 +149,15 @@ To infuse a gun yourself (a quest reward, a trader item), inject `PaPService` an
 | `RegisterName(tpl, name, shortName)` | The upgraded name, instead of "(115 Infused)" |
 | `RegisterBonuses(tpl, set)` / `BonusesFor(item)` | The gun's own stat bonuses (`PaPBonusSet.None` for none) / the bonuses a gun gets |
 | `RegisterShotSound(tpl, shot, tail)` / `NoShotTail(tpl)` | Its own upgraded fire sound / no Pack-a-Punch tail |
+| `KeepOwnShotSound(tpl)` | PaP adds no fire sound at all: your mod plays its own upgraded shot |
 | `SetGlowColor(tpl, color)` | Inventory glow and cell tint colour when upgraded |
 | `ExcludeFromCamo(tpl)` | No PaP camo at all on this gun |
+| `SetDefaultCamo(tpl, albedo, spec, tiling, glow[, paintOnly][, specGloss, normal])` | Your gun's own upgraded camo in place of the default one (only on materials named in `paintOnly`; `specGloss`/`normal` for Standard-shader materials). The Origins machine's look is unchanged |
 | `KeepMaterialsPlain(word, words...)` | Default camo: which of your materials stay plain |
 | `SetOriginsLook(word, crystal)` / `SetOriginsPartLook(word, crystal)` | Origins: crystal or plating, by material / renderer name |
 | `KeepOriginsPlain(word)`, `PaintCutoutOnOrigins(word)`, `SplitOnRed(word)` | Origins: skip, paint alpha-tested, split red from the rest |
-| `SetCamoTiling(word, scale)` | Camo drawn at another size on materials with this word in their name (2 = twice as small); for texture layouts that stretch it. PaP 2.1.2+ |
+| `SetCamoTiling(word, scale[, originsScale])` | Camo drawn at another size on materials with this word in their name (2 = twice as small); for texture layouts that stretch it. `originsScale` sets the Origins look's size on its own (PaP 2.2.1+). PaP 2.1.2+ |
+| `SetOriginsGlow(word, scale)` | Origins crystal glow strength on materials with this word in their name (1 = normal). PaP 2.2.1+ |
 | `ApplyCamo(model, item)` | Paint (or clear) the camo on a model you built |
 | `IsInfused(item or id)`, `IsOriginsGun(item)`, `InfusedIds`, `OriginalId(id)` | Upgrade state |
 | `WeaponUpgraded`, `InfusedChanged` | Events (main thread; a failing listener is logged, not thrown) |

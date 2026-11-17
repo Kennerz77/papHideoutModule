@@ -114,7 +114,7 @@ namespace PaPHideoutModule
             source.Play(); // restarts: never more than one PaP shot sound per gun
         }
 
-        /// <summary>Closest the original PaP weapon family for a Tarkov weapon class (works for modded guns: it's the class, not the gun).</summary>
+        /// <summary>Closest the original PaP weapon family for a weapon class (works for modded guns: it's the class, not the gun).</summary>
         private static string ClipFor(Weapon weapon)
         {
             switch (weapon.WeapClass?.ToLowerInvariant())

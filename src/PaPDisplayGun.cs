@@ -142,7 +142,12 @@ namespace PaPHideoutModule
 
         private static Bounds WorldBounds(GameObject go)
         {
-            Renderer[] renderers = go.GetComponentsInChildren<Renderer>(true).Where(r => r.enabled).ToArray();
+            // Only what's drawn: switched-off objects, hidden renderers, effects and parts shrunk to nothing (a mod gun's
+            // magazine slot can ride bones parked far off, e.g. the Wunderwaffe's clip) would pull the gun off centre
+            Renderer[] renderers = go.GetComponentsInChildren<Renderer>(false)
+                .Where(r => r.enabled && !r.forceRenderingOff && (r is MeshRenderer || r is SkinnedMeshRenderer)
+                            && r.transform.lossyScale.x > 0.01f)
+                .ToArray();
             if (renderers.Length == 0)
                 return new Bounds(go.transform.position, Vector3.one * 0.5f);
             Bounds bounds = renderers[0].bounds;

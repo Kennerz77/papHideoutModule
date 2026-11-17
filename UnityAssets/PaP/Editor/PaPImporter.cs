@@ -489,7 +489,7 @@ public static class PaPImporter
         if (se.Name == SignMaterial && albedo != null)
         {
             mat.SetTexture("_EmissionMap", albedo);
-            mat.SetColor("_EmissionColor", new Color(0.55f, 0.52f, 0.52f)); // dimmer than the the original sign: Tarkov's hideout is dark and it bloomed to white
+            mat.SetColor("_EmissionColor", new Color(0.55f, 0.52f, 0.52f)); // dimmer than the the original sign: the hideout is dark and it bloomed to white
             mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
             mat.EnableKeyword("_EMISSION");
         }
@@ -569,8 +569,10 @@ public static class PaPImporter
     // ---------- Animation ----------
 
     private static AnimatorController BuildController(string name, SEModel model, Transform[] bones, Transform root,
-        (string state, string anim, ClipMode mode)[] states, string animDir = AnimDir, string clipPrefix = "")
+        (string state, string anim, ClipMode mode)[] states, string animDir = null, string clipPrefix = "")
     {
+        // AnimDir comes from the KZ_EXPORT_ROOT variable (not a constant, so it can't be the parameter's default)
+        animDir = animDir ?? AnimDir;
         // tag_origin carries delta root motion / placement in the original anims; the object itself must stay put
         Transform[] animated = bones.Where(b => b.name != "tag_origin").ToArray();
 
